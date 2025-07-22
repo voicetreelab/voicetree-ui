@@ -62,7 +62,7 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
 
     async onload(): Promise<void> {
       super.onload();
-      console.log('Loading Juggl');
+      console.log('Loading Juggl - FIXED VERSION v1.5.2');
       navigator(cytoscape);
       cytoscape.use(popper);
       cytoscape.use(cola);

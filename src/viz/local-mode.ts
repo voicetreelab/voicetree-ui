@@ -60,6 +60,7 @@ export class LocalMode extends Component implements IAGMode {
 
       // Register on file open event
       this.registerEvent(this.view.workspace.on('file-open', async (file) => {
+        console.log('[Juggl Debug] local-mode file-open event fired');
         if (file) {
           await this.onOpenFile(file);
         }
@@ -70,11 +71,20 @@ export class LocalMode extends Component implements IAGMode {
       if (!this.view.settings.autoAddNodes) {
         return;
       }
+      if (!this.viz) {
+        console.warn('[Juggl Debug] local-mode onOpenFile - this.viz is null');
+        return;
+      }
       const id = new VizId(file.name, 'core');
       let node: NodeSingular;
       this.viz.startBatch();
       if (this.viz.$id(id.toId()).length === 0) {
         const nodeDef = await this.view.datastores.coreStore.get(id, this.view);
+        if (!nodeDef) {
+          console.log('[Juggl Debug] local-mode onOpenFile - nodeDef is null, skipping add');
+          this.viz.endBatch();
+          return;
+        }
         node = this.viz.add(nodeDef);
       } else {
         node = this.viz.$id(id.toId());

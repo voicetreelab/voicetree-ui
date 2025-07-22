@@ -175,7 +175,12 @@ export class WorkspaceMode extends Component implements IAGMode {
 
     // Register on file open event
     this.registerEvent(this.view.workspace.on('file-open', async (file) => {
+      console.log('[Juggl Debug] workspace file-open event fired');
       if (!this.view.settings.autoAddNodes) {
+        return;
+      }
+      if (!this.viz) {
+        console.warn('[Juggl Debug] workspace file-open - this.viz is null');
         return;
       }
       if (file && this.view.settings.autoAddNodes) {
@@ -184,6 +189,10 @@ export class WorkspaceMode extends Component implements IAGMode {
         let followImmediate = true;
         if (this.viz.$id(id.toId()).length === 0) {
           const node = await this.view.datastores.coreStore.get(id, this.view);
+          if (!node) {
+            console.log('[Juggl Debug] workspace file-open - node is null, skipping add');
+            return;
+          }
           this.viz.startBatch();
           // Make sure it doesn't immediately get removed
           this.viz.add(node).addClass(CLASS_PROTECTED);
