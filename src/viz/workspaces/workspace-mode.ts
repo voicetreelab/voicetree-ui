@@ -213,8 +213,8 @@ export class WorkspaceMode extends Component implements IAGMode {
     this.registerEvent(this.view.vault.on('create', async (file) => {
       console.log(`[Juggl Debug] vault create event fired for: ${file.path}, extension: ${file.extension}`);
       if (file.extension === 'md' && this.viz) {
-        console.log(`[Juggl Debug] Processing markdown file creation: ${file.basename}`);
-        const id = new VizId(file.basename, 'core');
+        console.log(`[Juggl Debug] Processing markdown file creation: ${file.name}`);
+        const id = new VizId(file.name, 'core');
         if (this.viz.$id(id.toId()).length === 0) {
           console.log(`[Juggl Debug] Node doesn't exist, creating: ${id.toId()}`);
           const node = await this.view.datastores.coreStore.get(id, this.view);
@@ -242,44 +242,45 @@ export class WorkspaceMode extends Component implements IAGMode {
       this.updateActiveNode(expanded, false);
     }));
 
-    // TODO: What to do with this?
-    this.registerEvent(this.view.on('elementsChange', () => {
-      if (this.recursionPreventer) {
-        console.log('[Juggl Debug] elementsChange - skipping due to recursion preventer');
-        return;
-      }
-      
-      console.log('[Juggl Debug] elementsChange - checking for orphan nodes to remove');
-      
-      const allNodes = this.viz.nodes();
-      const protectedNodes = this.viz.nodes(`.${CLASS_PROTECTED}`);
-      const unprotectedNodes = allNodes.difference(protectedNodes);
-      
-      console.log(`[Juggl Debug] All nodes: ${allNodes.length}, Protected: ${protectedNodes.length}, Unprotected: ${unprotectedNodes.length}`);
-      
-      const orphansToRemove = unprotectedNodes.filter((ele) => {
-        // If none in the closed neighborhood are expanded.
-        // Note that the closed neighborhood includes the current note.
-        const hasProtectedNeighbor = ele.closedNeighborhood(`node.${CLASS_PROTECTED}`).length > 0;
-        if (!hasProtectedNeighbor) {
-          console.log(`[Juggl Debug] Orphan node found: ${ele.id()} (no protected neighbors)`);
-        }
-        return !hasProtectedNeighbor;
-      });
-      
-      console.log(`[Juggl Debug] Removing ${orphansToRemove.length} orphan nodes`);
-      if (orphansToRemove.length > 0) {
-        orphansToRemove.forEach(node => {
-          console.log(`[Juggl Debug] Removing orphan: ${node.id()}`);
-        });
-        orphansToRemove.remove();
-      }
-      
-      this.updateActiveNode(this.viz.nodes(`.${CLASS_ACTIVE_NODE}`), false);
-      this.recursionPreventer = true;
-      this.view.onGraphChanged();
-      this.recursionPreventer = false;
-    }));
+    // TODO: Fix orphan removal causing infinite loop with metadata refresh
+    // Commenting out orphan removal temporarily to prevent infinite loop
+    // this.registerEvent(this.view.on('elementsChange', () => {
+    //   if (this.recursionPreventer) {
+    //     console.log('[Juggl Debug] elementsChange - skipping due to recursion preventer');
+    //     return;
+    //   }
+    //   
+    //   console.log('[Juggl Debug] elementsChange - checking for orphan nodes to remove');
+    //   
+    //   const allNodes = this.viz.nodes();
+    //   const protectedNodes = this.viz.nodes(`.${CLASS_PROTECTED}`);
+    //   const unprotectedNodes = allNodes.difference(protectedNodes);
+    //   
+    //   console.log(`[Juggl Debug] All nodes: ${allNodes.length}, Protected: ${protectedNodes.length}, Unprotected: ${unprotectedNodes.length}`);
+    //   
+    //   const orphansToRemove = unprotectedNodes.filter((ele) => {
+    //     // If none in the closed neighborhood are expanded.
+    //     // Note that the closed neighborhood includes the current note.
+    //     const hasProtectedNeighbor = ele.closedNeighborhood(`node.${CLASS_PROTECTED}`).length > 0;
+    //     if (!hasProtectedNeighbor) {
+    //       console.log(`[Juggl Debug] Orphan node found: ${ele.id()} (no protected neighbors)`);
+    //     }
+    //     return !hasProtectedNeighbor;
+    //   });
+    //   
+    //   console.log(`[Juggl Debug] Removing ${orphansToRemove.length} orphan nodes`);
+    //   if (orphansToRemove.length > 0) {
+    //     orphansToRemove.forEach(node => {
+    //       console.log(`[Juggl Debug] Removing orphan: ${node.id()}`);
+    //     });
+    //     orphansToRemove.remove();
+    //   }
+    //   
+    //   this.updateActiveNode(this.viz.nodes(`.${CLASS_ACTIVE_NODE}`), false);
+    //   this.recursionPreventer = true;
+    //   this.view.onGraphChanged();
+    //   this.recursionPreventer = false;
+    // }));
 
     this.windowEvent = async (evt: KeyboardEvent) => {
       if (!(activeDocument.activeElement === this.view.element)) {
