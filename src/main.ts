@@ -18,6 +18,7 @@ import type {
   IJuggl, IJugglSettings, IJugglEvents,
 } from 'juggl-api';
 import {OBSIDIAN_STORE_NAME, ObsidianStore} from './obsidian-store';
+import {TerminalDataStore} from './terminal-store';
 import cytoscape, {NodeSingular} from 'cytoscape';
 import navigator from 'cytoscape-navigator';
 import popper from 'cytoscape-popper';
@@ -55,6 +56,7 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
     metadata: MetadataCache
     coreStores: Record<string, ICoreDataStore> = {};
     stores: IDataStore[] = [];
+    terminalStore: TerminalDataStore;
     workspaceManager: WorkspaceManager;
     watcher: FSWatcher;
     ribbonIcon: HTMLElement;
@@ -62,7 +64,7 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
 
     async onload(): Promise<void> {
       super.onload();
-      console.log('Loading Juggl - FIXED VERSION v1.5.2');
+      console.log('Loading Juggl - FIXED VERSION v14.3.0 - Simplified Terminal Connection');
       navigator(cytoscape);
       cytoscape.use(popper);
       cytoscape.use(cola);
@@ -79,6 +81,12 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
       this.path = this.vault.getRoot().path;
       const obsidianStore = new ObsidianStore(this);
       this.addChild(obsidianStore);
+      
+      // Register terminal store
+      this.terminalStore = new TerminalDataStore(this);
+      this.addChild(this.terminalStore);
+      this.registerStore(this.terminalStore);
+      
       this.workspaceManager = new WorkspaceManager(this);
       this.addChild(this.workspaceManager);
       this.registerCoreStore(obsidianStore, OBSIDIAN_STORE_NAME);
@@ -250,6 +258,14 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
 
     public async openFileFromNode(node: NodeSingular, newLeaf= false): Promise<TFile> {
       const id = VizId.fromNode(node);
+      
+      // Handle terminal nodes
+      if (id.storeId === 'terminal') {
+        await this.openTerminalFromNode(node, newLeaf);
+        return null; // Terminal nodes don't return files
+      }
+      
+      // Handle file nodes (existing logic)
       if (!(id.storeId === 'core')) {
         return null;
       }
@@ -264,6 +280,19 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
         await this.openFile(file);
       }
       return file;
+    }
+
+    public async openTerminalFromNode(node: NodeSingular, newLeaf= false): Promise<void> {
+      const id = VizId.fromNode(node);
+      if (id.storeId !== 'terminal') {
+        return;
+      }
+
+      // Get or create a workspace leaf
+      const leaf = this.app.workspace.getLeaf(newLeaf);
+      
+      // Use the terminal store to spawn the terminal
+      await this.terminalStore.spawnTerminalInLeaf(id.id, leaf);
     }
 
     public async openFile(file: TFile, newLeaf=false) {

@@ -68,6 +68,8 @@ export class WorkspaceMode extends Component implements IAGMode {
       commands: (n: NodeSingular) => {
         const commands = [];
         const id = VizId.fromNode(n);
+        console.log('[Juggl Debug] Context menu for node:', id.storeId, id.id);
+        
         if (id.storeId === 'core') {
           commands.push({
             content: pathToSvg(icons.ag_file),
@@ -77,6 +79,42 @@ export class WorkspaceMode extends Component implements IAGMode {
             },
             enabled: true,
           });
+          
+          // Add "Spawn Terminal" option for markdown nodes
+          commands.push({
+            content: 'Terminal', // Plain text instead of emoji
+            select: async function(ele: NodeSingular) {
+              console.log('[Juggl Debug] Terminal option clicked for:', id.id);
+              // Spawn terminal connected to this markdown file
+              await plugin.terminalStore.spawnTerminalForFile(id.id, ele);
+            },
+            enabled: true,
+          });
+          console.log('[Juggl Debug] Added Terminal option to core node commands');
+        }
+        
+        // Terminal node specific commands
+        if (id.storeId === 'terminal') {
+          commands.push({
+            content: 'Open Terminal', // Plain text instead of emoji
+            select: async function(ele: NodeSingular, gestureStart: any, event: Event) {
+              console.log('[Juggl Debug] Open Terminal clicked for:', id.id);
+              // @ts-ignore
+              await plugin.openFileFromNode(ele, event.originalEvent.metaKey);
+            },
+            enabled: true,
+          });
+          
+          commands.push({
+            content: 'Hover Editor', // Plain text instead of emoji
+            select: async function(ele: NodeSingular) {
+              console.log('[Juggl Debug] Hover Editor clicked for:', id.id);
+              // Convert terminal to hover editor
+              await plugin.terminalStore.convertTerminalToHoverEditor(id.id);
+            },
+            enabled: true,
+          });
+          console.log('[Juggl Debug] Added terminal node context menu options');
         }
 
         commands.push(
@@ -139,7 +177,7 @@ export class WorkspaceMode extends Component implements IAGMode {
       adaptativeNodeSpotlightRadius: true, // specify whether the spotlight radius should adapt to the node size
       // minSpotlightRadius: 12, // the minimum radius in pixels of the spotlight (ignored for the node if adaptativeNodeSpotlightRadius is enabled but still used for the edge & background)
       // maxSpotlightRadius: 28, // the maximum radius in pixels of the spotlight (ignored for the node if adaptativeNodeSpotlightRadius is enabled but still used for the edge & background)
-      openMenuEvents: 'taphold', // space-separated cytoscape events that will open the menu; only `cxttapstart` and/or `taphold` work here
+      openMenuEvents: 'cxttapstart taphold', // space-separated cytoscape events that will open the menu; only `cxttapstart` and/or `taphold` work here
       itemColor: `${textColor}`, // the colour of text in the command's content
       itemTextShadowColor: 'transparent', // the text shadow colour of the command's content
       zIndex: 9999, // the z-index of the ui div
@@ -175,7 +213,6 @@ export class WorkspaceMode extends Component implements IAGMode {
 
     // Register on file open event
     this.registerEvent(this.view.workspace.on('file-open', async (file) => {
-      console.log('[Juggl Debug] workspace file-open event fired');
       if (!this.view.settings.autoAddNodes) {
         return;
       }
@@ -190,7 +227,6 @@ export class WorkspaceMode extends Component implements IAGMode {
         if (this.viz.$id(id.toId()).length === 0) {
           const node = await this.view.datastores.coreStore.get(id, this.view);
           if (!node) {
-            console.log('[Juggl Debug] workspace file-open - node is null, skipping add');
             return;
           }
           this.viz.startBatch();
@@ -211,30 +247,22 @@ export class WorkspaceMode extends Component implements IAGMode {
 
     // Auto-protect new markdown files (for VoiceTree orphan nodes)
     this.registerEvent(this.view.vault.on('create', async (file) => {
-      console.log(`[Juggl Debug] vault create event fired for: ${file.path}, extension: ${file.extension}`);
       if (file.extension === 'md' && this.viz) {
-        console.log(`[Juggl Debug] Processing markdown file creation: ${file.name}`);
         const id = new VizId(file.name, 'core');
         if (this.viz.$id(id.toId()).length === 0) {
-          console.log(`[Juggl Debug] Node doesn't exist, creating: ${id.toId()}`);
           const node = await this.view.datastores.coreStore.get(id, this.view);
           if (node) {
-            console.log(`[Juggl Debug] Successfully got node from datastore, adding to graph`);
             this.viz.startBatch();
             this.viz.add(node).addClass(CLASS_PROTECTED);
             const edges = await this.view.buildEdges(this.viz.$id(id.toId()));
             this.viz.add(edges);
             this.view.onGraphChanged(false, true);
             this.viz.endBatch();
-            console.log(`[Juggl Debug] Node added and protected: ${id.toId()}`);
           } else {
-            console.log(`[Juggl Debug] Failed to get node from datastore: ${id.toId()}`);
           }
         } else {
-          console.log(`[Juggl Debug] Node already exists in graph: ${id.toId()}`);
         }
       } else {
-        console.log(`[Juggl Debug] Skipping file - not markdown or viz not ready`);
       }
     }));
 
@@ -246,32 +274,26 @@ export class WorkspaceMode extends Component implements IAGMode {
     // Commenting out orphan removal temporarily to prevent infinite loop
     // this.registerEvent(this.view.on('elementsChange', () => {
     //   if (this.recursionPreventer) {
-    //     console.log('[Juggl Debug] elementsChange - skipping due to recursion preventer');
     //     return;
     //   }
     //   
-    //   console.log('[Juggl Debug] elementsChange - checking for orphan nodes to remove');
     //   
     //   const allNodes = this.viz.nodes();
     //   const protectedNodes = this.viz.nodes(`.${CLASS_PROTECTED}`);
     //   const unprotectedNodes = allNodes.difference(protectedNodes);
     //   
-    //   console.log(`[Juggl Debug] All nodes: ${allNodes.length}, Protected: ${protectedNodes.length}, Unprotected: ${unprotectedNodes.length}`);
     //   
     //   const orphansToRemove = unprotectedNodes.filter((ele) => {
     //     // If none in the closed neighborhood are expanded.
     //     // Note that the closed neighborhood includes the current note.
     //     const hasProtectedNeighbor = ele.closedNeighborhood(`node.${CLASS_PROTECTED}`).length > 0;
     //     if (!hasProtectedNeighbor) {
-    //       console.log(`[Juggl Debug] Orphan node found: ${ele.id()} (no protected neighbors)`);
     //     }
     //     return !hasProtectedNeighbor;
     //   });
     //   
-    //   console.log(`[Juggl Debug] Removing ${orphansToRemove.length} orphan nodes`);
     //   if (orphansToRemove.length > 0) {
     //     orphansToRemove.forEach(node => {
-    //       console.log(`[Juggl Debug] Removing orphan: ${node.id()}`);
     //     });
     //     orphansToRemove.remove();
     //   }

@@ -88,7 +88,6 @@ export class Juggl extends Component implements IJuggl {
     }
 
     async onload() {
-      console.log('[Juggl Debug] Juggl.onload called');
       try {
         this.element.addClass('cy-content');
         // Ensure the canvas fits the whole container
@@ -119,7 +118,6 @@ export class Juggl extends Component implements IJuggl {
           }
           // Filter nulls
           nodes = nodes.filter((n) => n);
-          console.log('[Juggl Debug] Creating cytoscape with initial nodes:', nodes.length);
           this.viz = cytoscape({
             container: div,
             elements: nodes,
@@ -178,17 +176,13 @@ export class Juggl extends Component implements IJuggl {
 
 
         const view = this;
-        console.log('[Juggl Debug] Setting up event handlers...');
         this.viz.on('tap boxselect', async (e) => {
-          console.log('[Juggl Debug] tap boxselect event fired');
           // @ts-ignore
           this.element.focus();
         });
 
         this.viz.on('tap', 'node', async (e) => {
-          console.log('[Juggl Debug] tap node event fired, e.target:', e.target);
           if (!e.target) {
-            console.warn('[Juggl Debug] tap node - e.target is null');
             return;
           }
           const id = VizId.fromNode(e.target);
@@ -198,13 +192,10 @@ export class Juggl extends Component implements IJuggl {
           // TODO THIS SHOULD BE MOVED TO LOCAL MODE!
         });
         this.viz.on('tap', 'edge', async (e) => {
-          console.log('[Juggl Debug] tap edge event fired');
           // todo: move to correct spot in the file.
         });
         this.viz.on('mouseover', 'node', async (e) => {
-          console.log('[Juggl Debug] mouseover node event fired, e.target:', e.target);
           if (!e.target) {
-            console.warn('[Juggl Debug] mouseover node - e.target is null');
             return;
           }
           e.target.unlock();
@@ -233,9 +224,7 @@ export class Juggl extends Component implements IJuggl {
           }
         });
         this.viz.on('mouseover', 'edge', async (e) => {
-          console.log('[Juggl Debug] mouseover edge event fired, e.target:', e.target);
           if (!e.target) {
-            console.warn('[Juggl Debug] mouseover edge - e.target is null');
             return;
           }
           const edge = e.target as EdgeSingular;
@@ -280,7 +269,6 @@ export class Juggl extends Component implements IJuggl {
           }
         });
         this.viz.on('mouseout', (e) => {
-          console.log('[Juggl Debug] mouseout event fired, e.target:', e.target);
           if (!e.target || e.target === e.cy) {
             return;
           }
@@ -295,15 +283,12 @@ export class Juggl extends Component implements IJuggl {
           }
         });
         this.viz.on('grab', (e) => {
-          console.log('[Juggl Debug] grab event fired, e.target:', e.target);
           if (this.activeLayout) {
             this.activeLayout.stop();
           }
         });
         this.viz.on('dragfree', (e) => {
-          console.log('[Juggl Debug] dragfree event fired, e.target:', e.target);
           if (!e.target) {
-            console.warn('[Juggl Debug] dragfree - e.target is null');
             return;
           }
           if (this.activeLayout) {
@@ -322,7 +307,6 @@ export class Juggl extends Component implements IJuggl {
         this.viz.on('cxttap', (e) => {
           // Thanks Liam for sharing how to do context menus
           const fileMenu = new Menu(this.plugin.app); // Creates empty file menu
-          console.log('[Juggl Debug] cxttap event - e.target:', e.target, 'has group method:', e.target && typeof e.target.group === 'function');
           if (e.target && !(e.target === this.viz) && typeof e.target.group === 'function' && e.target.group() === 'nodes') {
             const id = VizId.fromNode(e.target);
             e.target.select();
@@ -338,7 +322,6 @@ export class Juggl extends Component implements IJuggl {
           fileMenu.showAtPosition({x: e.originalEvent.x, y: e.originalEvent.y});
         });
         this.viz.on('layoutstop', debounce((e: EventObject) => {
-          console.log('[Juggl Debug] layoutstop event fired');
           if (!this.settings.autoZoom) {
             return;
           }

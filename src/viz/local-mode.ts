@@ -52,6 +52,16 @@ export class LocalMode extends Component implements IAGMode {
     _onLoad() {
       this.viz = this.view.viz;
       this.registerCyEvent('tap', 'node', async (e: EventObject) => {
+        const id = VizId.fromNode(e.target);
+        
+        if (id.storeId === 'terminal') {
+          // Handle terminal nodes - just open the terminal
+          await this.view.plugin.openFileFromNode(e.target, e.originalEvent.metaKey);
+          // Don't call onOpenFile for terminals since they don't have files
+          return;
+        }
+        
+        // Handle file nodes (existing logic)
         const file = await this.view.plugin.openFileFromNode(e.target, e.originalEvent.metaKey);
         if (file) {
           await this.onOpenFile(file);
@@ -60,7 +70,6 @@ export class LocalMode extends Component implements IAGMode {
 
       // Register on file open event
       this.registerEvent(this.view.workspace.on('file-open', async (file) => {
-        console.log('[Juggl Debug] local-mode file-open event fired');
         if (file) {
           await this.onOpenFile(file);
         }
@@ -81,7 +90,6 @@ export class LocalMode extends Component implements IAGMode {
       if (this.viz.$id(id.toId()).length === 0) {
         const nodeDef = await this.view.datastores.coreStore.get(id, this.view);
         if (!nodeDef) {
-          console.log('[Juggl Debug] local-mode onOpenFile - nodeDef is null, skipping add');
           this.viz.endBatch();
           return;
         }

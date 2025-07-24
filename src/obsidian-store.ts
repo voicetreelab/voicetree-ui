@@ -264,13 +264,11 @@ ${edge.data.context}`;
     }
 
     async refreshNode(id: VizId, view: IJuggl) {
-      console.log('[Juggl Debug] refreshNode - Checking vizReady:', view.vizReady, 'viz:', !!view.viz);
       if (!view.vizReady || !view.viz) {
         console.warn('[Juggl] Fixed version - View visualization not initialized yet (vizReady:', view.vizReady, '), skipping refresh');
         return;
       }
       const idS = id.toId();
-      console.log('[Juggl Debug] refreshNode - Getting node with id:', idS);
       let correctEdges: IMergedToGraph;
       let node = view.viz.$id(idS);
       if (this.getFile(id) === null) {
@@ -291,7 +289,6 @@ ${edge.data.context}`;
             return;
         }
         view.mergeToGraph([nodeDef], true, false);
-        console.log('[Juggl Debug] refreshNode - Re-getting node after merge with id:', idS);
         if (!view.viz) {
           console.error('[Juggl Debug] view.viz became null after mergeToGraph!');
           return;
@@ -314,13 +311,11 @@ ${edge.data.context}`;
       const store = this;
       this.registerEvent(
           this.metadata.on('changed', (file) => {
-            console.log('[Juggl Debug] metadata.on.changed event fired for file:', file.path);
             store.plugin.activeGraphs().forEach(async (v) => {
               if (!v) {
                 console.warn('[Juggl Debug] metadata changed - view is null/undefined');
                 return;
               }
-              console.log('[Juggl Debug] metadata changed - Checking vizReady:', v.vizReady, 'viz:', !!v.viz);
               if (v.vizReady && v.viz) {
                 await store.refreshNode(VizId.fromFile(file), v);
               } else {
@@ -341,7 +336,6 @@ ${edge.data.context}`;
                     console.warn('[Juggl Debug] rename handler - view is null/undefined');
                     return;
                   }
-                  console.log('[Juggl Debug] rename handler - Checking vizReady:', v.vizReady, 'viz:', !!v.viz);
                   if (!v.vizReady || !v.viz) {
                     console.warn('[Juggl Debug] rename handler - viz not ready (vizReady:', v.vizReady, '), skipping remove');
                     return;
@@ -360,7 +354,6 @@ ${edge.data.context}`;
                   console.warn('[Juggl Debug] delete handler - view is null/undefined');
                   return;
                 }
-                console.log('[Juggl Debug] delete handler - Checking vizReady:', v.vizReady, 'viz:', !!v.viz);
                 if (!v.vizReady || !v.viz) {
                   console.warn('[Juggl Debug] delete handler - viz not ready (vizReady:', v.vizReady, '), skipping remove');
                   return;

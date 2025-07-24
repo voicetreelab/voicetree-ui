@@ -246,6 +246,55 @@ node:selected[degree] {
   font-size: mapData(degree, 0, 60, 5, 11);
 }
 
+/* Terminal Node Styling */
+.terminal-node {
+  shape: round-rectangle;
+  background-color: #2d3748;
+  border-width: 2px;
+  border-color: #4fd1c7;
+  color: #f7fafc;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.terminal-active {
+  border-color: #38a169;
+  background-color: #1a2e1a;
+}
+
+.terminal-inactive {
+  border-color: #a0aec0;
+  background-color: #4a5568;
+}
+
+.terminal-error {
+  border-color: #e53e3e;
+  background-color: #2d1b1b;
+}
+
+/* Terminal profile specific styling */
+.profile-bash {
+  border-style: solid;
+}
+
+.profile-zsh {
+  border-style: dashed;
+}
+
+.profile-powershell {
+  border-style: dotted;
+}
+
+/* Terminal connection styling */
+.terminal-connected {
+  border-width: 3px; /* Thicker border for connected terminals */
+}
+
+.terminal-connection {
+  line-color: #4fd1c7;
+  line-style: dashed;
+  width: 2px;
+}
+
 edge {
   line-color: ${lineColor};
   loop-sweep: -50deg;
