@@ -209,6 +209,35 @@ export class WorkspaceMode extends Component implements IAGMode {
       }
     }));
 
+    // Auto-protect new markdown files (for VoiceTree orphan nodes)
+    this.registerEvent(this.view.vault.on('create', async (file) => {
+      console.log(`[Juggl Debug] vault create event fired for: ${file.path}, extension: ${file.extension}`);
+      if (file.extension === 'md' && this.viz) {
+        console.log(`[Juggl Debug] Processing markdown file creation: ${file.basename}`);
+        const id = new VizId(file.basename, 'core');
+        if (this.viz.$id(id.toId()).length === 0) {
+          console.log(`[Juggl Debug] Node doesn't exist, creating: ${id.toId()}`);
+          const node = await this.view.datastores.coreStore.get(id, this.view);
+          if (node) {
+            console.log(`[Juggl Debug] Successfully got node from datastore, adding to graph`);
+            this.viz.startBatch();
+            this.viz.add(node).addClass(CLASS_PROTECTED);
+            const edges = await this.view.buildEdges(this.viz.$id(id.toId()));
+            this.viz.add(edges);
+            this.view.onGraphChanged(false, true);
+            this.viz.endBatch();
+            console.log(`[Juggl Debug] Node added and protected: ${id.toId()}`);
+          } else {
+            console.log(`[Juggl Debug] Failed to get node from datastore: ${id.toId()}`);
+          }
+        } else {
+          console.log(`[Juggl Debug] Node already exists in graph: ${id.toId()}`);
+        }
+      } else {
+        console.log(`[Juggl Debug] Skipping file - not markdown or viz not ready`);
+      }
+    }));
+
     this.registerEvent(this.view.on('expand', (expanded) => {
       this.updateActiveNode(expanded, false);
     }));
@@ -216,17 +245,36 @@ export class WorkspaceMode extends Component implements IAGMode {
     // TODO: What to do with this?
     this.registerEvent(this.view.on('elementsChange', () => {
       if (this.recursionPreventer) {
+        console.log('[Juggl Debug] elementsChange - skipping due to recursion preventer');
         return;
       }
-      // Remove nodes that are not protected and not connected to expanded nodes
-      this.viz.nodes()
-          .difference(this.viz.nodes(`.${CLASS_PROTECTED}`))
-          .filter((ele) => {
-            // If none in the closed neighborhood are expanded.
-            // Note that the closed neighborhood includes the current note.
-            return ele.closedNeighborhood(`node.${CLASS_PROTECTED}`).length === 0;
-          })
-          .remove();
+      
+      console.log('[Juggl Debug] elementsChange - checking for orphan nodes to remove');
+      
+      const allNodes = this.viz.nodes();
+      const protectedNodes = this.viz.nodes(`.${CLASS_PROTECTED}`);
+      const unprotectedNodes = allNodes.difference(protectedNodes);
+      
+      console.log(`[Juggl Debug] All nodes: ${allNodes.length}, Protected: ${protectedNodes.length}, Unprotected: ${unprotectedNodes.length}`);
+      
+      const orphansToRemove = unprotectedNodes.filter((ele) => {
+        // If none in the closed neighborhood are expanded.
+        // Note that the closed neighborhood includes the current note.
+        const hasProtectedNeighbor = ele.closedNeighborhood(`node.${CLASS_PROTECTED}`).length > 0;
+        if (!hasProtectedNeighbor) {
+          console.log(`[Juggl Debug] Orphan node found: ${ele.id()} (no protected neighbors)`);
+        }
+        return !hasProtectedNeighbor;
+      });
+      
+      console.log(`[Juggl Debug] Removing ${orphansToRemove.length} orphan nodes`);
+      if (orphansToRemove.length > 0) {
+        orphansToRemove.forEach(node => {
+          console.log(`[Juggl Debug] Removing orphan: ${node.id()}`);
+        });
+        orphansToRemove.remove();
+      }
+      
       this.updateActiveNode(this.viz.nodes(`.${CLASS_ACTIVE_NODE}`), false);
       this.recursionPreventer = true;
       this.view.onGraphChanged();
