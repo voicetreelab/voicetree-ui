@@ -203,6 +203,17 @@ export class WorkspaceMode extends Component implements IAGMode {
       }
     });
 
+    this.registerCyEvent('mouseover', 'node', async (e: EventObject) => {
+      if (e.originalEvent.metaKey || e.originalEvent.ctrlKey) {
+        console.log('[Juggl Human] meta/ctrl');
+
+        const id = VizId.fromNode(e.target);
+        if (id.storeId === 'terminal') {
+          await this.view.plugin.terminalStore.convertTerminalToHoverEditor(id.id);
+        }
+      }
+    });
+
     this.registerCyEvent('dblclick', 'node', async (e: EventObject) => {
       await this.view.expand(e.target as NodeSingular);
     });
