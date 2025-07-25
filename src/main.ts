@@ -64,7 +64,7 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
 
     async onload(): Promise<void> {
       super.onload();
-      console.log('Loading Juggl - FIXED VERSION v22.3.0 - Simplified Terminal Connection');
+      console.log('Loading Juggl - FIXED VERSION v32.3.0 - Simplified Terminal Connection');
       navigator(cytoscape);
       cytoscape.use(popper);
       cytoscape.use(cola);
@@ -287,12 +287,17 @@ export default class JugglPlugin extends Plugin implements IJugglPlugin {
       if (id.storeId !== 'terminal') {
         return;
       }
+      
+      const terminal = this.terminalStore.terminals.get(id.id);
+      if (!terminal) {
+        console.error(`[Juggl] Terminal not found: ${id.id}`);
+        return;
+      }
 
-      // Get or create a workspace leaf
-      const leaf = this.app.workspace.getLeaf(newLeaf);
+      const file = terminal.sourceFile ? this.app.metadataCache.getFirstLinkpathDest(terminal.sourceFile, '') : null;
       
       // Use the terminal store to spawn the terminal
-      await this.terminalStore.spawnTerminalInLeaf(id.id, leaf);
+      await this.terminalStore.spawnTerminalInLeaf(id.id, file);
     }
 
     public async openFile(file: TFile, newLeaf=false) {

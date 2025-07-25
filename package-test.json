@@ -1,0 +1,19 @@
+{
+  "name": "juggl-terminal-integration-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "wdio run wdio.conf.js",
+    "test:terminal": "wdio run wdio.conf.js --spec=**/terminal*.spec.js"
+  },
+  "devDependencies": {
+    "@wdio/cli": "^8.0.0",
+    "@wdio/local-runner": "^8.0.0",
+    "@wdio/mocha-framework": "^8.0.0",
+    "@wdio/spec-reporter": "^8.0.0",
+    "wdio-obsidian-service": "^1.2.1",
+    "mocha": "^10.0.0",
+    "chai": "^4.3.0"
+  }
+}

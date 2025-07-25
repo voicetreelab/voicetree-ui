@@ -128,6 +128,7 @@ export const genStyleGroups = function(plugin: JugglPlugin): StyleGroup[] {
 
 
 export interface IJugglPluginSettings {
+    terminalCommand: string;
     typedLinkPrefix: string;
     splitDirection: SplitDirection; // 'horizontal';
     globalGraphRibbon: boolean;
@@ -142,6 +143,7 @@ export interface IJugglPluginSettings {
 
 
 export const DefaultJugglSettings: IJugglPluginSettings = {
+  terminalCommand: '',
   splitDirection: 'vertical',
   typedLinkPrefix: '-',
   useImgServer: false,
@@ -476,5 +478,17 @@ export class JugglGraphSettingsTab extends PluginSettingTab {
                   this.plugin.saveData(this.plugin.settings);
                 });
           });
+
+      new Setting(containerEl)
+        .setName('Terminal Command')
+        .setDesc('The command to run when a new terminal is opened from a node. You can use {{source_note_path}}, {{source_note_name}}, and {{source_note_basename}} as placeholders.')
+        .addText((text) => {
+          text.setPlaceholder('e.g. echo "Hello from {{source_note_name}}"')
+            .setValue(this.plugin.settings.terminalCommand)
+            .onChange((value) => {
+              this.plugin.settings.terminalCommand = value;
+              this.plugin.saveData(this.plugin.settings);
+            });
+        });
     }
 }

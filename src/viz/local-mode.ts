@@ -68,6 +68,17 @@ export class LocalMode extends Component implements IAGMode {
         }
       });
 
+      this.registerCyEvent('mouseover', 'node', async (e: EventObject) => {
+        if (e.originalEvent.metaKey || e.originalEvent.ctrlKey) {
+            console.log('[Juggl Human] meta/ctrl');
+
+          const id = VizId.fromNode(e.target);
+          if (id.storeId === 'terminal') {
+            await this.view.plugin.terminalStore.convertTerminalToHoverEditor(id.id);
+          }
+        }
+      });
+
       // Register on file open event
       this.registerEvent(this.view.workspace.on('file-open', async (file) => {
         if (file) {
