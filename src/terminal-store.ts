@@ -322,6 +322,56 @@ echo "────────────────────────�
         }
     }
 
+    async spawnTerminalForHoverEditor(terminalId: string): Promise<WorkspaceLeaf> {
+        console.log(`[Juggl Debug] Spawning clean terminal leaf for hover editor: ${terminalId}`);
+        const terminal = this.terminals.get(terminalId);
+        if (!terminal) {
+            console.error(`[Juggl Debug] Terminal ${terminalId} not found in store.`);
+            return null;
+        }
+
+        const terminalPlugin = this.app.plugins.plugins['terminal'];
+        if (!terminalPlugin) {
+            console.error('[Juggl Debug] Terminal plugin not found.');
+            return null;
+        }
+
+        const leavesBefore = new Set(this.app.workspace.getLeavesOfType('terminal:terminal'));
+        
+        try {
+            await this.app.commands.executeCommandById('terminal:open-terminal.integrated.root');
+
+            let newLeaf: WorkspaceLeaf = null;
+            for (let i = 0; i < 10; i++) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                const leavesAfter = this.app.workspace.getLeavesOfType('terminal:terminal');
+                const foundLeaf = leavesAfter.find(leaf => !leavesBefore.has(leaf));
+                if (foundLeaf) {
+                    newLeaf = foundLeaf;
+                    break;
+                }
+            }
+
+            if (newLeaf) {
+                console.log(`[Juggl Debug] New clean terminal leaf identified: ${newLeaf.view.getViewType()}`);
+                terminal.leaf = newLeaf;
+                terminal.status = 'active';
+                this.events.trigger('modifyNode', terminalId);
+                return newLeaf;
+            } else {
+                console.error(`[Juggl Debug] Could not find new clean terminal leaf.`);
+                terminal.status = 'error';
+                this.events.trigger('modifyNode', terminalId);
+                return null;
+            }
+        } catch (error) {
+            console.error('[Juggl Debug] Error executing command to open clean terminal:', error);
+            terminal.status = 'error';
+            this.events.trigger('modifyNode', terminalId);
+            return null;
+        }
+    }
+
     // Method to convert terminal leaf to hover editor
     async convertTerminalToHoverEditor(terminalId: string): Promise<void> {
         console.log(`[Juggl Debug] Converting terminal to hover editor: ${terminalId}`);
@@ -339,13 +389,12 @@ echo "────────────────────────�
 
         let leafToConvert = terminal.leaf;
 
-        // If the leaf doesn't exist or is invalid, spawn a new one.
+        // If the leaf doesn't exist or is invalid, spawn a new one using the clean method.
         if (!leafToConvert || leafToConvert.view.getViewType() !== 'terminal:terminal') {
-            console.log('[Juggl Debug] No valid leaf found. Spawning new terminal...');
-            const file = terminal.sourceFile ? this.app.metadataCache.getFirstLinkpathDest(terminal.sourceFile, '') : null;
-            leafToConvert = await this.spawnTerminalInLeaf(terminalId, file);
+            console.log('[Juggl Debug] No valid leaf found. Spawning new clean terminal for hover editor...');
+            leafToConvert = await this.spawnTerminalForHoverEditor(terminalId);
             if (!leafToConvert) {
-                console.error('[Juggl Debug] Failed to spawn terminal for hover editor.');
+                console.error('[Juggl Debug] Failed to spawn clean terminal for hover editor.');
                 return;
             }
         }
