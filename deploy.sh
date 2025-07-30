@@ -4,7 +4,7 @@
 # Usage: ./deploy.sh
 
 VAULT_PATH="/Users/bobbobby/repos/VoiceTreePoc/markdownTreeVault/.obsidian/plugins/juggl"
-
+VAULT_PATH_2="/Users/bobbobby/repos/VoiceTreePoc/backend/benchmarker/output/.obsidian/plugins/juggl"
 # Check if npm run dev is running
 if ! pgrep -f "rollup.*-w" > /dev/null; then
     echo "⚠️  Warning: 'npm run dev' doesn't seem to be running!"
@@ -22,8 +22,15 @@ fi
 mkdir -p "$VAULT_PATH"
 
 # Copy files
-echo "📦 Copying files to vault..."
+echo "📦 Copying files to vault... $VAULT_PATH"
 cp main.js manifest.json styles.css "$VAULT_PATH/"
+
+# Create plugin directory if it doesn't exist
+mkdir -p "$VAULT_PATH_2"
+
+# Copy files
+echo "📦 Copying files to vault... $VAULT_PATH_2"
+cp main.js manifest.json styles.css "$VAULT_PATH_2/"
 
 if [ $? -eq 0 ]; then
     echo "✅ Files deployed successfully!"

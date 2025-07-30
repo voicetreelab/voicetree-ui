@@ -24,6 +24,9 @@ class EventRec {
     event: any;
 }
 
+
+// IMPORTANT CLAUDE, DON"T BOTHER MODIFYING ANYTHING HERE, WE ONLY USE juggl-main/src/viz/workspaces/workspace-mode.ts
+
 export class LocalMode extends Component implements IAGMode {
     view;
     viz: Core;

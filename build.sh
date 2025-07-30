@@ -28,5 +28,6 @@ npm run build
 # Copy files to vault
 echo "Copying files to vault..."
 cp main.js manifest.json styles.css /Users/bobbobby/repos/VoiceTreePoc/markdownTreeVault/.obsidian/plugins/juggl/
+cp main.js manifest.json styles.css /Users/bobbobby/repos/VoiceTreePoc/backend/benchmarker/output/.obsidian/plugins/juggl
 
 echo "Build and deploy complete - FIXED VERSION v$NEW_VERSION"
