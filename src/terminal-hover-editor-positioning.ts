@@ -6,9 +6,10 @@ export interface HoverEditorTracking {
     updatePosition: () => void;
     onGraphMovement: () => void;
     movementTimeout?: NodeJS.Timeout;
-    baseWidth?: number;
-    baseHeight?: number;
-    lastZoom?: number;
+    originalWidth?: number;
+    originalHeight?: number;
+    resizeScaleFactorWidth?: number;
+    resizeScaleFactorHeight?: number;
 }
 
 export class TerminalHoverEditorPositioning {
@@ -56,9 +57,10 @@ export class TerminalHoverEditorPositioning {
         let userOffsetY = 0;
         let isGraphMoving = false;
         let movementTimeout: NodeJS.Timeout;
-        let baseWidth = popover.offsetWidth;
-        let baseHeight = popover.offsetHeight;
-        let lastZoom = node.cy().zoom();
+        const originalWidth = popover.offsetWidth;
+        const originalHeight = popover.offsetHeight;
+        let resizeScaleFactorWidth = 1;
+        let resizeScaleFactorHeight = 1;
 
         // Calculate default position
         const getDefaultPosition = () => {
@@ -72,8 +74,8 @@ export class TerminalHoverEditorPositioning {
             
             // Calculate default position (centered on node)
             return {
-                x: centerX - popoverWidth / 2,
-                y: centerY - popoverHeight / 2
+                x: centerX - popoverWidth / 2 + 300,
+                y: centerY - popoverHeight / 2 - 50
             };
         };
 
@@ -92,15 +94,14 @@ export class TerminalHoverEditorPositioning {
             popover.setAttribute('data-x', finalX.toString());
             popover.setAttribute('data-y', finalY.toString());
             
-            // Apply zoom-based resizing
+            // Apply zoom-based resizing with user's resize preference
             const currentZoom = node.cy().zoom();
-            const scaleFactor = Math.pow(currentZoom, 0.3);
-            const scaledWidth = baseWidth * scaleFactor;
-            const scaledHeight = baseHeight * scaleFactor;
+            const scaledWidth = originalWidth * currentZoom * resizeScaleFactorWidth;
+            const scaledHeight = originalHeight * currentZoom * resizeScaleFactorHeight;
             
-            // Apply size with constraints
-            const finalWidth = Math.max(200, Math.min(800, scaledWidth));
-            const finalHeight = Math.max(150, Math.min(600, scaledHeight));
+            // Apply size with constraints - smaller minimum when zoomed out
+            const finalWidth = Math.max(50, Math.min(800, scaledWidth));
+            const finalHeight = Math.max(38, Math.min(1200, scaledHeight));
             
             popover.style.width = `${finalWidth}px`;
             popover.style.height = `${finalHeight}px`;
@@ -133,9 +134,10 @@ export class TerminalHoverEditorPositioning {
                 const currentWidth = popover.offsetWidth;
                 const currentHeight = popover.offsetHeight;
                 const currentZoom = node.cy().zoom();
-                const scaleFactor = Math.pow(currentZoom, 0.3);
-                const expectedWidth = Math.max(200, Math.min(800, baseWidth * scaleFactor));
-                const expectedHeight = Math.max(150, Math.min(600, baseHeight * scaleFactor));
+
+                // Calculate expected size using the same logic as updatePosition
+                const expectedWidth = Math.max(50, Math.min(800, originalWidth * currentZoom * resizeScaleFactorWidth));
+                const expectedHeight = Math.max(38, Math.min(1200, originalHeight * currentZoom * resizeScaleFactorHeight));
                 
                 const widthDiff = Math.abs(currentWidth - expectedWidth);
                 const heightDiff = Math.abs(currentHeight - expectedHeight);
@@ -145,10 +147,10 @@ export class TerminalHoverEditorPositioning {
                     console.log('[Juggl Debug] Manual resize detected at start of graph movement');
                     console.log(`[Juggl Debug] Size diff: W=${widthDiff.toFixed(1)}, H=${heightDiff.toFixed(1)}`);
                     
-                    // Update base dimensions to current size adjusted for zoom
-                    baseWidth = currentWidth / scaleFactor;
-                    baseHeight = currentHeight / scaleFactor;
-                    console.log(`[Juggl Debug] New base size: ${baseWidth.toFixed(0)}x${baseHeight.toFixed(0)}`);
+                    // Calculate new resize scale factors
+                    resizeScaleFactorWidth = currentWidth / (originalWidth * currentZoom);
+                    resizeScaleFactorHeight = currentHeight / (originalHeight * currentZoom);
+                    console.log(`[Juggl Debug] New resize scale factors: W=${resizeScaleFactorWidth.toFixed(2)}, H=${resizeScaleFactorHeight.toFixed(2)}`);
                 }
             }
             isGraphMoving = true;
@@ -180,9 +182,10 @@ export class TerminalHoverEditorPositioning {
             updatePosition,
             onGraphMovement,
             movementTimeout,
-            baseWidth,
-            baseHeight,
-            lastZoom
+            originalWidth,
+            originalHeight,
+            resizeScaleFactorWidth,
+            resizeScaleFactorHeight
         };
         this.hoverEditorTracking.set(terminalId, tracking);
         
