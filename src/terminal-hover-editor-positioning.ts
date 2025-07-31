@@ -128,6 +128,28 @@ export class TerminalHoverEditorPositioning {
                     userOffsetY = currentY - defaultPos.y;
                     console.log(`[Juggl Debug] New offset: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
                 }
+                
+                // Check for manual resize BEFORE we update
+                const currentWidth = popover.offsetWidth;
+                const currentHeight = popover.offsetHeight;
+                const currentZoom = node.cy().zoom();
+                const scaleFactor = Math.pow(currentZoom, 0.3);
+                const expectedWidth = Math.max(200, Math.min(800, baseWidth * scaleFactor));
+                const expectedHeight = Math.max(150, Math.min(600, baseHeight * scaleFactor));
+                
+                const widthDiff = Math.abs(currentWidth - expectedWidth);
+                const heightDiff = Math.abs(currentHeight - expectedHeight);
+                const sizeThreshold = 5;
+                
+                if (widthDiff > sizeThreshold || heightDiff > sizeThreshold) {
+                    console.log('[Juggl Debug] Manual resize detected at start of graph movement');
+                    console.log(`[Juggl Debug] Size diff: W=${widthDiff.toFixed(1)}, H=${heightDiff.toFixed(1)}`);
+                    
+                    // Update base dimensions to current size adjusted for zoom
+                    baseWidth = currentWidth / scaleFactor;
+                    baseHeight = currentHeight / scaleFactor;
+                    console.log(`[Juggl Debug] New base size: ${baseWidth.toFixed(0)}x${baseHeight.toFixed(0)}`);
+                }
             }
             isGraphMoving = true;
             
@@ -138,33 +160,6 @@ export class TerminalHoverEditorPositioning {
             movementTimeout = setTimeout(() => {
                 console.log('[Juggl Debug] Graph movement stopped');
                 isGraphMoving = false;
-                
-                // Check for manual resize
-                const currentWidth = popover.offsetWidth;
-                const currentHeight = popover.offsetHeight;
-                const currentZoom = node.cy().zoom();
-                
-                // Calculate expected size based on zoom
-                const scaleFactor = Math.pow(currentZoom, 0.3);
-                const expectedWidth = Math.max(200, Math.min(800, baseWidth * scaleFactor));
-                const expectedHeight = Math.max(150, Math.min(600, baseHeight * scaleFactor));
-                
-                // If size differs from expected, user has manually resized
-                const widthDiff = Math.abs(currentWidth - expectedWidth);
-                const heightDiff = Math.abs(currentHeight - expectedHeight);
-                const threshold = 5;
-                
-                if (widthDiff > threshold || heightDiff > threshold) {
-                    console.log('[Juggl Debug] Manual resize detected');
-                    console.log(`[Juggl Debug] Size diff: W=${widthDiff.toFixed(1)}, H=${heightDiff.toFixed(1)}`);
-                    
-                    // Update base dimensions to current size adjusted for zoom
-                    baseWidth = currentWidth / scaleFactor;
-                    baseHeight = currentHeight / scaleFactor;
-                    console.log(`[Juggl Debug] New base size: ${baseWidth.toFixed(0)}x${baseHeight.toFixed(0)}`);
-                }
-                
-                lastZoom = currentZoom;
             }, 100);
             
             // Update position immediately for smooth following
