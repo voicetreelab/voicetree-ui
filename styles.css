@@ -67,6 +67,112 @@ div.juggl-error {
     height: 140px !important;
 }
 
+/* Custom graph.css styles merged from user configuration */
+
+/* Fix scrollbar flickering in Juggl graph view */
+.cy-content {
+    /* Hide scrollbars completely */
+    overflow: hidden !important;
+    -ms-overflow-style: none !important;  /* IE and Edge */
+    scrollbar-width: none !important;  /* Firefox */
+}
+
+/* Hide scrollbars in webkit browsers (Chrome, Safari, newer Edge) */
+.cy-content::-webkit-scrollbar {
+    display: none !important;
+}
+
+/* Alternative: If you prefer to keep scrollbars but prevent flickering,
+   uncomment the following and comment out the above */
+.cy-content {
+    overflow: auto !important;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.cy-content::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.cy-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.cy-content::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.cy-content::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Make text under nodes slightly bigger with more padding */
+node {
+    font-size: 7px;
+    /* Add more spacing between node and text */
+    text-margin-y: 3px;
+    /* Node text color - using dark gray */
+    color: #333;
+}
+
+/* Scale nodes based on their degree (number of connections) */
+node[degree] {
+    /* Map degree from 0-20 connections to 10-40px width/height */
+    width: mapData(degree, 0, 20, 15, 30);
+    height: mapData(degree, 0, 20, 15, 30);
+    font-size: mapData(degree, 0, 20, 7, 9);
+
+    /* Also scale border */
+    border-width: mapData(degree, 1, 10, 1, 8);
+    border-color: #666;
+    color: #666
+}
+
+/* Style edges with thicker lines and clearer arrows */
+edge {
+    font-style: italic;
+    /* Make edges thicker */
+    width: 2px;
+    /* Make arrow tips larger and clearer */
+    target-arrow-shape: triangle;
+    target-arrow-color: #666;
+    arrow-scale: 0.7;
+    /* Hollow arrow with solid border */
+    target-arrow-fill: hollow;
+    /* More transparent edges for better layering */
+    line-opacity: 0.3;
+    /* Default edge color */
+    line-color: #666;
+    /* Add shadow for sharper edge definition */
+    shadow-blur: 2;
+    shadow-color: #333;
+    shadow-opacity: 0.3;
+    shadow-offset-x: 0;
+    shadow-offset-y: 0;
+    font-size: 5px;
+    /* Edge text color - medium gray */
+    color: #666;
+}
+
+/* Scale edge width based on connection count */
+edge[edgeCount] {
+    width: mapData(edgeCount, 1, 10, 2, 5);
+    line-opacity: mapData(edgeCount, 1, 10, 0.2, 0.4);
+}
+
+.pinned {
+    shape: rectangle;
+    width: 50px;
+    height: 45px;
+    font-size: 5;
+    text-valign: center;
+    text-max-width: 45px;
+    text-opacity: 1;
+    color: white;
+}
+
 .cy-content {
     padding: 0 !important;
 }
