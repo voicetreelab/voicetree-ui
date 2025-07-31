@@ -11,7 +11,9 @@
   "scripts": {
     "dev": "node_modules/.bin/rollup --config rollup.config.js -w",
     "build": "node_modules/.bin/rollup --config rollup.config.js",
-    "release": "node_modules/.bin/standard-version"
+    "release": "node_modules/.bin/standard-version",
+    "test:unit": "mocha test/unit/node-positioning.spec.js",
+    "test": "npm run test:unit"
   },
   "standard-version": {
     "t": ""

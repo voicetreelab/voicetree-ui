@@ -236,16 +236,62 @@ export class WorkspaceMode extends Component implements IAGMode {
         const id = new VizId(name, 'core');
         let followImmediate = true;
         if (this.viz.$id(id.toId()).length === 0) {
+          console.log('[Juggl Position Debug] Creating new node for file:', file.name);
           const node = await this.view.datastores.coreStore.get(id, this.view);
           if (!node) {
+            console.log('[Juggl Position Debug] Node data is null, returning');
             return;
           }
-          this.viz.startBatch();
-          // Make sure it doesn't immediately get removed
-          this.viz.add(node).addClass(CLASS_PROTECTED);
+          
+          // Don't set position manually - let mergeToGraph handle edge-aware positioning
+          console.log('[Juggl Position Debug] Using mergeToGraph for edge-aware positioning');
+          
+          // Remove any preset position to let the algorithm work
+          delete node.position;
+          
+          // Use mergeToGraph which includes setInitialNodePositions
+          const mergeResult = this.view.mergeToGraph([node], true, false);
+          const addedNode = mergeResult.added.nodes()[0];
+          addedNode.addClass(CLASS_PROTECTED);
+          
+          console.log('[Juggl Position Debug] Node added, current position:', addedNode.position());
+          
+          // IMPORTANT: Set position after adding to graph
+          if (node.position) {
+            console.log('[Juggl Position Debug] Setting position explicitly to:', node.position);
+            addedNode.position(node.position);
+            addedNode.lock();
+            console.log('[Juggl Position Debug] After setting position:', addedNode.position());
+            console.log('[Juggl Position Debug] Node locked:', addedNode.locked());
+          }
+          
           const edges = await this.view.buildEdges(this.viz.$id(id.toId()));
+          console.log('[Juggl Position Debug] Built edges count:', edges.length);
           this.viz.add(edges);
-          this.view.onGraphChanged(false, true);
+          
+          console.log('[Juggl Position Debug] Skipping layout completely');
+          // Skip layout completely for new nodes
+          // Update node data without triggering layout
+          this.viz.nodes().forEach((node) => {
+            node.data('degree', node.degree(false));
+            node.data('nameLength', node.data('name').length);
+          });
+          this.view.trigger('elementsChange');
+          this.view.searchFilter(this.view.settings.filter);
+          this.view.assignStyleGroups();
+          
+          console.log('[Juggl Position Debug] Node position after skipping layout:', addedNode.position());
+          
+          // Unlock after a short delay to allow user interaction
+          if (node.position) {
+            setTimeout(() => {
+              console.log('[Juggl Position Debug] Unlocking node after delay');
+              if (!addedNode.hasClass(CLASS_PINNED)) {
+                addedNode.unlock();
+              }
+            }, 1000);
+          }
+          
           this.viz.endBatch();
           followImmediate = false;
         }
@@ -263,11 +309,48 @@ export class WorkspaceMode extends Component implements IAGMode {
         if (this.viz.$id(id.toId()).length === 0) {
           const node = await this.view.datastores.coreStore.get(id, this.view);
           if (node) {
-            this.viz.startBatch();
-            this.viz.add(node).addClass(CLASS_PROTECTED);
+            console.log('[Juggl Position Debug] CREATE EVENT - Creating new node for file:', file.name);
+            
+            // Don't set position manually - let mergeToGraph handle edge-aware positioning
+            console.log('[Juggl Position Debug] CREATE EVENT - Using mergeToGraph for edge-aware positioning');
+            
+            // Remove any preset position to let the algorithm work
+            delete node.position;
+            
+            // Use mergeToGraph which includes setInitialNodePositions
+            const mergeResult = this.view.mergeToGraph([node], true, false);
+            const addedNode = mergeResult.added.nodes()[0];
+            addedNode.addClass(CLASS_PROTECTED);
+            
+            console.log('[Juggl Position Debug] CREATE EVENT - Node added, current position:', addedNode.position());
+            
             const edges = await this.view.buildEdges(this.viz.$id(id.toId()));
+            console.log('[Juggl Position Debug] CREATE EVENT - Built edges count:', edges.length);
             this.viz.add(edges);
-            this.view.onGraphChanged(false, true);
+            
+            console.log('[Juggl Position Debug] CREATE EVENT - Skipping layout completely');
+            // Skip layout completely for new nodes
+            // Update node data without triggering layout
+            this.viz.nodes().forEach((node) => {
+              node.data('degree', node.degree(false));
+              node.data('nameLength', node.data('name').length);
+            });
+            this.view.trigger('elementsChange');
+            this.view.searchFilter(this.view.settings.filter);
+            this.view.assignStyleGroups();
+            
+            console.log('[Juggl Position Debug] CREATE EVENT - Node position after skipping layout:', addedNode.position());
+            
+            // Unlock after a short delay to allow user interaction
+            if (node.position) {
+              setTimeout(() => {
+                console.log('[Juggl Position Debug] CREATE EVENT - Unlocking node after delay');
+                if (!addedNode.hasClass(CLASS_PINNED)) {
+                  addedNode.unlock();
+                }
+              }, 1000);
+            }
+            
             this.viz.endBatch();
           } else {
           }

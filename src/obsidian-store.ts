@@ -288,6 +288,25 @@ ${edge.data.context}`;
             console.log("Failed to get node definition on refresh. This should not happen!");
             return;
         }
+        
+        // Get the file cache to find what this node links to
+        const file = this.getFile(id);
+        const cache = file ? this.metadata.getFileCache(file) : null;
+        
+        // Extract the links from this new node
+        const linkedNodeIds: string[] = [];
+        if (cache) {
+          this.iterLinks(cache, (ref, _) => {
+            const linkedId = this.getOtherId(ref, file.path).toId();
+            linkedNodeIds.push(linkedId);
+          });
+        }
+        
+        // Store the linked nodes in the node definition for positioning
+        if (linkedNodeIds.length > 0) {
+          nodeDef.data = { ...nodeDef.data, linkedNodeIds };
+        }
+        
         view.mergeToGraph([nodeDef], true, false);
         if (!view.viz) {
           console.error('[Juggl Debug] view.viz became null after mergeToGraph!');
@@ -313,7 +332,7 @@ ${edge.data.context}`;
           this.metadata.on('changed', (file) => {
             store.plugin.activeGraphs().forEach(async (v) => {
               if (!v) {
-                console.warn('[Juggl Debug] metadata changed - view is null/undefined');
+                // console.warn('[Juggl Debug] metadata changed - view is null/undefined');
                 return;
               }
               if (v.vizReady && v.viz) {

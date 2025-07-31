@@ -43,6 +43,7 @@ import {
 import {LocalMode} from './local-mode';
 import {parseLayoutSettings} from './layout-settings';
 import {filter} from './query-builder';
+import {findOptimalPosition, setInitialNodePositions, mergeToGraph as mergeToGraphUtil} from './new-node-positioning';
 
 export const MD_VIEW_TYPE = 'markdown';
 
@@ -238,32 +239,38 @@ export class Juggl extends Component implements IJuggl {
           }
           if ('context' in edge.data() && (e.originalEvent.metaKey || !this.settings.metaKeyHover)) {// && e.originalEvent.metaKey) {
             // TODO resolve SourcePath, can be done using the source file.
-            this.hoverTimeout[e.target.id()] = setTimeout(async () => {
-              // Emile: Removed the hover editor
-              // const id = VizId.fromNode(edge.source());
-              // const file = this.plugin.metadata.getFirstLinkpathDest(id.id, '');
-              // @ts-ignore
-              // if (file && file.extension === 'md' && 'obsidian-hover-editor' in this.plugin.app.plugins.plugins) {
-              //   const line = edge.data().line;
-              //   const passState = {
-              //     scroll: line,
-              //     line: line,
-              //     startLoc: {
-              //       line: line,
-              //       col: edge.data().start,
-              //       offset: 0,
-              //     } as Loc,
-              //     endLoc: {
-              //       line: line,
-              //       col: edge.data().end,
-              //       offset: 0,
-              //     },
-              //   };
-              //   this.plugin.app.workspace.trigger('link-hover', this.element, null, file.path, '', passState);
-              // } else {
-              // @ts-ignore
-              await this.popover(edge.data()['context'], '', edge, 'juggl-preview-edge');
-              // }
+            const edgeId = e.target.id();
+            const edgeContext = edge.data()['context'];
+            this.hoverTimeout[edgeId] = setTimeout(async () => {
+              // Re-query the edge to ensure it still exists
+              const currentEdge = this.viz.$id(edgeId);
+              if (currentEdge && currentEdge.length > 0) {
+                // Emile: Removed the hover editor
+                // const id = VizId.fromNode(edge.source());
+                // const file = this.plugin.metadata.getFirstLinkpathDest(id.id, '');
+                // @ts-ignore
+                // if (file && file.extension === 'md' && 'obsidian-hover-editor' in this.plugin.app.plugins.plugins) {
+                //   const line = edge.data().line;
+                //   const passState = {
+                //     scroll: line,
+                //     line: line,
+                //     startLoc: {
+                //       line: line,
+                //       col: edge.data().start,
+                //       offset: 0,
+                //     } as Loc,
+                //     endLoc: {
+                //       line: line,
+                //       col: edge.data().end,
+                //       offset: 0,
+                //     },
+                //   };
+                //   this.plugin.app.workspace.trigger('link-hover', this.element, null, file.path, '', passState);
+                // } else {
+                // @ts-ignore
+                await this.popover(edgeContext, '', currentEdge[0], 'juggl-preview-edge');
+                // }
+              }
             },
             800);
           }
@@ -353,6 +360,12 @@ export class Juggl extends Component implements IJuggl {
     }
 
     async popover(mdContent: string, sourcePath: string, target: Singular, styleClass: string) {
+      // Safety check to ensure target exists and has required methods
+      if (!target || typeof target.on !== 'function' || typeof target.popper !== 'function') {
+        console.warn('[Juggl] Invalid target passed to popover method');
+        return;
+      }
+      
       const newDiv = activeDocument.createElement('div');
       newDiv.addClasses(['popover', 'hover-popover', 'is-loaded', 'juggl-hover']);
       const mdEmbedDiv = activeDocument.createElement('div');
@@ -369,7 +382,7 @@ export class Juggl extends Component implements IJuggl {
       mdPreviewView.appendChild(mdPreviewSection);
 
 
-      await MarkdownRenderer.renderMarkdown(mdContent, mdPreviewSection, sourcePath, null );
+      await MarkdownRenderer.renderMarkdown(mdContent, mdPreviewSection, sourcePath, this );
 
       activeDocument.body.appendChild(newDiv);
       // @ts-ignore
@@ -423,6 +436,7 @@ export class Juggl extends Component implements IJuggl {
     }
 
     async expand(toExpand: NodeCollection, batch=true, triggerGraphChanged=true): Promise<IMergedToGraph | null> {
+      console.log('[Juggl Position Debug] expand called with triggerGraphChanged:', triggerGraphChanged);
       if (toExpand.length === 0) {
         return Promise.resolve(null);
       }
@@ -434,13 +448,15 @@ export class Juggl extends Component implements IJuggl {
       // Currently returns the edges merged into the graph, not the full neighborhood
       const expandedIds = toExpand.map((n) => VizId.fromNode(n));
       const neighbourhood = await this.neighbourhood(expandedIds);
-      this.mergeToGraph(neighbourhood, false, false);
+      console.log('[Juggl Position Debug] expand - merging neighbourhood nodes');
+      this.mergeToGraph(neighbourhood, false, false, toExpand);
       const nodes = this.viz.collection();
       neighbourhood.forEach((n) => {
         nodes.merge(this.viz.$id(n.data.id) as NodeSingular);
       });
 
       const edges = await this.buildEdges(nodes);
+      console.log('[Juggl Position Debug] expand - merging edges with triggerGraphChanged:', triggerGraphChanged);
       const edgesInGraph = this.mergeToGraph(edges, false, triggerGraphChanged);
       if (batch) {
         this.viz.endBatch();
@@ -501,6 +517,8 @@ export class Juggl extends Component implements IJuggl {
     // }
 
     restartLayout() {
+      // console.log('[Juggl Position Debug] restartLayout called!');
+      console.trace('[Juggl Position Debug] Layout restart stack trace');
       if (this.activeLayout) {
         this.activeLayout.stop();
       }
@@ -508,6 +526,7 @@ export class Juggl extends Component implements IJuggl {
       try {
         const triggerS = {'layout': layoutSettings, 'collection': this.viz.elements()};
         this.trigger("layout", triggerS);
+        // console.log('[Juggl Position Debug] Starting layout with settings:', layoutSettings.options);
         this.activeLayout = layoutSettings.startLayout(triggerS.collection);
       } catch (e) {
         console.log(e);
@@ -520,40 +539,49 @@ export class Juggl extends Component implements IJuggl {
     }
 
 
-    mergeToGraph(elements: ElementDefinition[], batch=true, triggerGraphChanged=true): IMergedToGraph {
-      if (batch) {
-        this.viz.startBatch();
-      }
-      const addElements: ElementDefinition[] = [];
-      const mergedCollection = this.viz.collection();
-      elements.forEach((n) => {
-        if (this.viz.$id(n.data.id).length === 0) {
-          addElements.push(n);
-        } else {
-          const gElement = this.viz.$id(n.data.id);
-          const extraClasses = CLASSES.filter((clazz) => gElement.hasClass(clazz));
+    mergeToGraph(elements: ElementDefinition[], batch=true, triggerGraphChanged=true, parentNodes?: NodeCollection, nodeCache?: any): IMergedToGraph {
+      return mergeToGraphUtil(
+        this.viz,
+        elements,
+        batch,
+        triggerGraphChanged,
+        parentNodes,
+        nodeCache,
+        (batch) => this.onGraphChanged(batch),
+        (viz, newNodes, parentNodes) => this.setInitialNodePositions(newNodes, parentNodes)
+      );
+    }
 
-          // @ts-ignore
-          extraClasses.push(...gElement.classes().filter((el: string) => el.startsWith('global-') || el.startsWith('local-')));
-
-          // TODO: Maybe make an event here
-          gElement.classes(n.classes);
-          for (const clazz of extraClasses) {
-            gElement.addClass(clazz);
-          }
-          gElement.data(n.data);
-          mergedCollection.merge(gElement);
-        }
-      });
-      const addCollection = this.viz.add(addElements);
-      mergedCollection.merge(addCollection);
-      if (triggerGraphChanged) {
-        this.onGraphChanged(false);
+    private setInitialNodePositions(newNodes: NodeCollection, parentNodes?: NodeCollection): void {
+      setInitialNodePositions(this.viz, newNodes, parentNodes, this.findOptimalPosition.bind(this));
+    }
+    
+    private findOptimalPosition(parentNode: any, newNode: any): {x: number, y: number} {
+      return findOptimalPosition(parentNode, newNode);
+    }
+    
+    private checkEdgeIntersection(
+      p1: {x: number, y: number}, p2: {x: number, y: number},
+      p3: {x: number, y: number}, p4: {x: number, y: number}
+    ): boolean {
+      // Check if line segment p1-p2 intersects with line segment p3-p4
+      const cross = (a: {x: number, y: number}, b: {x: number, y: number}) => a.x * b.y - a.y * b.x;
+      const sub = (a: {x: number, y: number}, b: {x: number, y: number}) => ({x: a.x - b.x, y: a.y - b.y});
+      
+      const r = sub(p2, p1);
+      const s = sub(p4, p3);
+      const rxs = cross(r, s);
+      
+      if (Math.abs(rxs) < 0.0001) {
+        // Lines are parallel or collinear
+        return false;
       }
-      if (batch) {
-        this.viz.endBatch();
-      }
-      return {merged: mergedCollection, added: addCollection};
+      
+      const t = cross(sub(p3, p1), s) / rxs;
+      const u = cross(sub(p3, p1), r) / rxs;
+      
+      // Check if intersection point is within both line segments
+      return t >= 0 && t <= 1 && u >= 0 && u <= 1;
     }
 
     assignStyleGroups() {
@@ -592,9 +620,17 @@ export class Juggl extends Component implements IJuggl {
       this.trigger('elementsChange');
       this.searchFilter(this.settings.filter);
       if (debounceLayout) {
+        console.log("HUMAN, DEBOUNCE LAYOUT TRUE")
+
         this.debouncedRestartLayout();
       } else {
-        this.restartLayout();
+        console.log("HUMAN, DEBOUNCE LAYOUT FALSE")
+        // Only restart layout if explicitly requested (not false)
+        if (debounceLayout !== false) {
+            console.log("HUMAN, DEBOUNCE??? NOT FALSE")
+
+          this.restartLayout();
+        }
       }
       this.assignStyleGroups();
     }
