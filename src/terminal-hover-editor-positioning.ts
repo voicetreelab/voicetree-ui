@@ -4,6 +4,8 @@ export interface HoverEditorTracking {
     popover: HTMLElement;
     node: NodeSingular;
     updatePosition: () => void;
+    handleMouseDown: (e: MouseEvent) => void;
+    handleMouseUp: (e: MouseEvent) => void;
 }
 
 export class TerminalHoverEditorPositioning {
@@ -46,13 +48,16 @@ export class TerminalHoverEditorPositioning {
         const popover = popovers[popovers.length - 1] as HTMLElement;
         console.log(`[Juggl Debug] Found hover editor popover:`, popover);
         
-        // Track user offset
+        // State management - offset only changes on user drag
         let userOffsetX = 0;
         let userOffsetY = 0;
-        let isFirstUpdate = true;
-        
-        // Create position update function
+        let isUserDragging = false;
+
+        // Simple position update - just applies current state
         const updatePosition = () => {
+            // Skip updates while user is dragging
+            if (isUserDragging) return;
+            
             const boundingBox = node.renderedBoundingBox();
             const popoverWidth = popover.offsetWidth;
             const popoverHeight = popover.offsetHeight;
@@ -64,31 +69,8 @@ export class TerminalHoverEditorPositioning {
             // Calculate default position (centered on node)
             const defaultX = centerX - popoverWidth / 2;
             const defaultY = centerY - popoverHeight / 2;
-            
-            // Only check for user movement after first update
-            if (!isFirstUpdate) {
-                // Get current position
-                const currentX = parseFloat(popover.style.left) || 0;
-                const currentY = parseFloat(popover.style.top) || 0;
-                
-                // Calculate expected position with current offset
-                const expectedX = defaultX + userOffsetX;
-                const expectedY = defaultY + userOffsetY;
-                
-                // Use threshold to detect deliberate user movement
-                // (pan updates are small, user drags are large)
-                const threshold = 30; // pixels
-                
-                if (Math.abs(currentX - expectedX) > threshold ||
-                    Math.abs(currentY - expectedY) > threshold) {
-                    // User moved it - update offset
-                    userOffsetX = currentX - defaultX;
-                    userOffsetY = currentY - defaultY;
-                    console.log(`[Juggl Debug] User moved hover editor. New offset: ${userOffsetX}, ${userOffsetY}`);
-                }
-            }
 
-            // Apply position with offset
+            // Apply position with user offset
             const finalX = defaultX + userOffsetX;
             const finalY = defaultY + userOffsetY;
             
@@ -100,11 +82,45 @@ export class TerminalHoverEditorPositioning {
             // Update data attributes for hover editor compatibility
             popover.setAttribute('data-x', finalX.toString());
             popover.setAttribute('data-y', finalY.toString());
-            
-            // Mark first update as complete
-            isFirstUpdate = false;
+        };
+
+        // Detect when user starts dragging the popover specifically
+        const handleMouseDown = (e: MouseEvent) => {
+            // Only set dragging if the mousedown was on the popover itself
+            if (e.target === popover || popover.contains(e.target as Node)) {
+                isUserDragging = true;
+                console.log('[Juggl Debug] User started dragging hover editor');
+            }
         };
         
+        // Detect when user finishes dragging and update offset
+        const handleMouseUp = (e: MouseEvent) => {
+            if (!isUserDragging) return;
+            
+            isUserDragging = false;
+            
+            // Get current positions
+            const currentX = parseFloat(popover.style.left) || 0;
+            const currentY = parseFloat(popover.style.top) || 0;
+            const boundingBox = node.renderedBoundingBox();
+            const popoverWidth = popover.offsetWidth;
+            const popoverHeight = popover.offsetHeight;
+            const centerX = (boundingBox.x1 + boundingBox.x2) / 2;
+            const centerY = (boundingBox.y1 + boundingBox.y2) / 2;
+            const defaultX = centerX - popoverWidth / 2;
+            const defaultY = centerY - popoverHeight / 2;
+            
+            // Calculate and save the new offset
+            userOffsetX = currentX - defaultX;
+            userOffsetY = currentY - defaultY;
+            console.log(`[Juggl Debug] User drag ended. New offset: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
+        };
+        
+        // Add drag detection listeners
+        // Listen on document during CAPTURE phase to intercept before stopPropagation
+        document.addEventListener('mousedown', handleMouseDown, true);  // true = capture phase
+        document.addEventListener('mouseup', handleMouseUp);
+
         // Initial positioning
         updatePosition();
         
@@ -112,11 +128,13 @@ export class TerminalHoverEditorPositioning {
         node.on('position', updatePosition);
         node.cy().on('pan zoom resize', updatePosition);
         
-        // Store the tracking info
+        // Store tracking info with handlers for cleanup
         this.hoverEditorTracking.set(terminalId, {
             popover,
             node,
-            updatePosition
+            updatePosition,
+            handleMouseDown,
+            handleMouseUp
         });
         
         // Clean up when popover is removed
@@ -137,9 +155,13 @@ export class TerminalHoverEditorPositioning {
     cleanupHoverEditorTracking(terminalId: string): void {
         const tracking = this.hoverEditorTracking.get(terminalId);
         if (tracking) {
-            // Remove event listeners
+            // Remove Cytoscape event listeners
             tracking.node.off('position', tracking.updatePosition);
             tracking.node.cy().off('pan zoom resize', tracking.updatePosition);
+            
+            // Remove drag event listeners (must match capture phase)
+            document.removeEventListener('mousedown', tracking.handleMouseDown, true);  // true = capture phase
+            document.removeEventListener('mouseup', tracking.handleMouseUp);
             
             // Remove from tracking map
             this.hoverEditorTracking.delete(terminalId);
