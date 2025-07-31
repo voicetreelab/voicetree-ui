@@ -204,6 +204,15 @@ export class WorkspaceMode extends Component implements IAGMode {
     });
 
     this.registerCyEvent('mouseover', 'node', async (e: EventObject) => {
+      const node = e.target as NodeSingular;
+      
+      // Check if this is a pinned node with breathing animation
+      if (node.hasClass(CLASS_PINNED) && node.data('breathingActive')) {
+        // Stop breathing animation when hover is triggered
+        console.log(`[Juggl] Stopping breathing animation due to hover on node ${node.id()}`);
+        this.stopBreathingAnimationForNode(node);
+      }
+      
       if (e.originalEvent.metaKey || e.originalEvent.ctrlKey) {
         console.log('[Juggl Human] meta/ctrl');
 
@@ -652,29 +661,7 @@ export class WorkspaceMode extends Component implements IAGMode {
     
     // Stop any running animations and restore original border
     unlocked.forEach((node) => {
-      // Mark as inactive
-      node.data('breathingActive', false);
-      
-      // Stop animation if it exists
-      const animation = this.breathingAnimations.get(node.id());
-      if (animation) {
-        animation.stop();
-        this.breathingAnimations.delete(node.id());
-      }
-      
-      // Stop all animations on the node
-      node.stop(true, false);
-      
-      // Restore original border style
-      const originalBorderWidth = node.data('originalBorderWidth') || '2';
-      const originalBorderColor = node.data('originalBorderColor') || '#666';
-      const originalBorderOpacity = node.data('originalBorderOpacity') || '1';
-      
-      node.style({
-        'border-width': originalBorderWidth,
-        'border-color': originalBorderColor,
-        'border-opacity': originalBorderOpacity
-      });
+      this.stopBreathingAnimationForNode(node);
       
       // Clean up data
       node.removeData('breathingActive originalBorderWidth originalBorderColor originalBorderOpacity');
@@ -701,14 +688,14 @@ export class WorkspaceMode extends Component implements IAGMode {
   }
 
   private breathingAnimations: Map<string, any> = new Map();
+  private breathingTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
   private addBreathingAnimation(nodes: NodeCollection) {
     nodes.forEach((node) => {
+      const nodeId = node.id();
+      
       // Stop any existing animation for this node
-      const existingAni = this.breathingAnimations.get(node.id());
-      if (existingAni && existingAni.playing()) {
-        existingAni.stop();
-      }
+      this.stopBreathingAnimation(nodeId);
 
       // Store original styles
       const originalBorderWidth = node.style('border-width') || '2';
@@ -721,6 +708,14 @@ export class WorkspaceMode extends Component implements IAGMode {
       
       // Create the breathing animation loop
       this.createBreathingLoop(node);
+      
+      // Set 15-second timeout to stop the animation
+      const timeout = setTimeout(() => {
+        console.log(`[Juggl] Stopping breathing animation for node ${nodeId} after 15 seconds`);
+        this.stopBreathingAnimationForNode(node);
+      }, 15000);
+      
+      this.breathingTimeouts.set(nodeId, timeout);
     });
   }
 
@@ -730,12 +725,12 @@ export class WorkspaceMode extends Component implements IAGMode {
       return;
     }
 
-    // Create forward animation (expand)
+    // Create forward animation (expand) - now only goes to 5px instead of 8px
     const expandAnimation = node.animation({
       style: {
-        'border-width': 8,
-        'border-color': 'rgba(0, 255, 255, 1)',
-        'border-opacity': 1
+        'border-width': 5,
+        'border-color': 'rgba(0, 255, 255, 0.9)',
+        'border-opacity': 0.9
       },
       duration: 1200,
       easing: 'ease-in-out-sine'
@@ -786,5 +781,44 @@ export class WorkspaceMode extends Component implements IAGMode {
 
   pinSelection() {
     this.pin(this.viz.nodes(':selected'));
+  }
+
+  private stopBreathingAnimation(nodeId: string) {
+    // Clear timeout
+    const timeout = this.breathingTimeouts.get(nodeId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.breathingTimeouts.delete(nodeId);
+    }
+    
+    // Stop animation
+    const animation = this.breathingAnimations.get(nodeId);
+    if (animation && animation.playing()) {
+      animation.stop();
+    }
+    this.breathingAnimations.delete(nodeId);
+  }
+
+  private stopBreathingAnimationForNode(node: any) {
+    const nodeId = node.id();
+    
+    // Mark as inactive
+    node.data('breathingActive', false);
+    
+    // Stop animation
+    this.stopBreathingAnimation(nodeId);
+    
+    // Restore original style
+    const originalBorderWidth = node.data('originalBorderWidth') || '2';
+    const originalBorderColor = node.data('originalBorderColor') || 'rgba(0, 255, 255, 0.8)';
+    const originalBorderOpacity = node.data('originalBorderOpacity') || '1';
+    
+    node.style({
+      'border-width': originalBorderWidth,
+      'border-color': originalBorderColor,
+      'border-opacity': originalBorderOpacity
+    });
+    
+    console.log(`[Juggl] Stopped breathing animation for node ${nodeId}`);
   }
 }
