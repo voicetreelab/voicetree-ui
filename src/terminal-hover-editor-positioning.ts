@@ -6,6 +6,9 @@ export interface HoverEditorTracking {
     updatePosition: () => void;
     onGraphMovement: () => void;
     movementTimeout?: NodeJS.Timeout;
+    baseWidth?: number;
+    baseHeight?: number;
+    lastZoom?: number;
 }
 
 export class TerminalHoverEditorPositioning {
@@ -53,6 +56,9 @@ export class TerminalHoverEditorPositioning {
         let userOffsetY = 0;
         let isGraphMoving = false;
         let movementTimeout: NodeJS.Timeout;
+        let baseWidth = popover.offsetWidth;
+        let baseHeight = popover.offsetHeight;
+        let lastZoom = node.cy().zoom();
 
         // Calculate default position
         const getDefaultPosition = () => {
@@ -71,7 +77,7 @@ export class TerminalHoverEditorPositioning {
             };
         };
 
-        // Position update function - just applies current state
+        // Position and size update function
         const updatePosition = () => {
             const defaultPos = getDefaultPosition();
             const finalX = defaultPos.x + userOffsetX;
@@ -85,6 +91,19 @@ export class TerminalHoverEditorPositioning {
             // Update data attributes for hover editor compatibility
             popover.setAttribute('data-x', finalX.toString());
             popover.setAttribute('data-y', finalY.toString());
+            
+            // Apply zoom-based resizing
+            const currentZoom = node.cy().zoom();
+            const scaleFactor = Math.pow(currentZoom, 0.3);
+            const scaledWidth = baseWidth * scaleFactor;
+            const scaledHeight = baseHeight * scaleFactor;
+            
+            // Apply size with constraints
+            const finalWidth = Math.max(200, Math.min(800, scaledWidth));
+            const finalHeight = Math.max(150, Math.min(600, scaledHeight));
+            
+            popover.style.width = `${finalWidth}px`;
+            popover.style.height = `${finalHeight}px`;
         };
 
         // Debounced graph movement handler
@@ -119,6 +138,33 @@ export class TerminalHoverEditorPositioning {
             movementTimeout = setTimeout(() => {
                 console.log('[Juggl Debug] Graph movement stopped');
                 isGraphMoving = false;
+                
+                // Check for manual resize
+                const currentWidth = popover.offsetWidth;
+                const currentHeight = popover.offsetHeight;
+                const currentZoom = node.cy().zoom();
+                
+                // Calculate expected size based on zoom
+                const scaleFactor = Math.pow(currentZoom, 0.3);
+                const expectedWidth = Math.max(200, Math.min(800, baseWidth * scaleFactor));
+                const expectedHeight = Math.max(150, Math.min(600, baseHeight * scaleFactor));
+                
+                // If size differs from expected, user has manually resized
+                const widthDiff = Math.abs(currentWidth - expectedWidth);
+                const heightDiff = Math.abs(currentHeight - expectedHeight);
+                const threshold = 5;
+                
+                if (widthDiff > threshold || heightDiff > threshold) {
+                    console.log('[Juggl Debug] Manual resize detected');
+                    console.log(`[Juggl Debug] Size diff: W=${widthDiff.toFixed(1)}, H=${heightDiff.toFixed(1)}`);
+                    
+                    // Update base dimensions to current size adjusted for zoom
+                    baseWidth = currentWidth / scaleFactor;
+                    baseHeight = currentHeight / scaleFactor;
+                    console.log(`[Juggl Debug] New base size: ${baseWidth.toFixed(0)}x${baseHeight.toFixed(0)}`);
+                }
+                
+                lastZoom = currentZoom;
             }, 100);
             
             // Update position immediately for smooth following
@@ -138,7 +184,10 @@ export class TerminalHoverEditorPositioning {
             node,
             updatePosition,
             onGraphMovement,
-            movementTimeout
+            movementTimeout,
+            baseWidth,
+            baseHeight,
+            lastZoom
         };
         this.hoverEditorTracking.set(terminalId, tracking);
         
