@@ -4,8 +4,8 @@ export interface HoverEditorTracking {
     popover: HTMLElement;
     node: NodeSingular;
     updatePosition: () => void;
-    handleMouseDown: (e: MouseEvent) => void;
-    handleMouseUp: (e: MouseEvent) => void;
+    onGraphMovement: () => void;
+    movementTimeout?: NodeJS.Timeout;
 }
 
 export class TerminalHoverEditorPositioning {
@@ -48,16 +48,14 @@ export class TerminalHoverEditorPositioning {
         const popover = popovers[popovers.length - 1] as HTMLElement;
         console.log(`[Juggl Debug] Found hover editor popover:`, popover);
         
-        // State management - offset only changes on user drag
+        // State management
         let userOffsetX = 0;
         let userOffsetY = 0;
-        let isUserDragging = false;
+        let isGraphMoving = false;
+        let movementTimeout: NodeJS.Timeout;
 
-        // Simple position update - just applies current state
-        const updatePosition = () => {
-            // Skip updates while user is dragging
-            if (isUserDragging) return;
-            
+        // Calculate default position
+        const getDefaultPosition = () => {
             const boundingBox = node.renderedBoundingBox();
             const popoverWidth = popover.offsetWidth;
             const popoverHeight = popover.offsetHeight;
@@ -67,12 +65,17 @@ export class TerminalHoverEditorPositioning {
             const centerY = (boundingBox.y1 + boundingBox.y2) / 2;
             
             // Calculate default position (centered on node)
-            const defaultX = centerX - popoverWidth / 2;
-            const defaultY = centerY - popoverHeight / 2;
+            return {
+                x: centerX - popoverWidth / 2,
+                y: centerY - popoverHeight / 2
+            };
+        };
 
-            // Apply position with user offset
-            const finalX = defaultX + userOffsetX;
-            const finalY = defaultY + userOffsetY;
+        // Position update function - just applies current state
+        const updatePosition = () => {
+            const defaultPos = getDefaultPosition();
+            const finalX = defaultPos.x + userOffsetX;
+            const finalY = defaultPos.y + userOffsetY;
             
             popover.style.position = 'fixed';
             popover.style.left = `${finalX}px`;
@@ -84,58 +87,60 @@ export class TerminalHoverEditorPositioning {
             popover.setAttribute('data-y', finalY.toString());
         };
 
-        // Detect when user starts dragging the popover specifically
-        const handleMouseDown = (e: MouseEvent) => {
-            // Only set dragging if the mousedown was on the popover itself
-            if (e.target === popover || popover.contains(e.target as Node)) {
-                isUserDragging = true;
-                console.log('[Juggl Debug] User started dragging hover editor');
+        // Debounced graph movement handler
+        const onGraphMovement = () => {
+            if (!isGraphMoving) {
+                console.log('[Juggl Debug] Graph movement started');
+                // Check for user drag BEFORE we start moving
+                const currentX = parseFloat(popover.style.left) || 0;
+                const currentY = parseFloat(popover.style.top) || 0;
+                const defaultPos = getDefaultPosition();
+                const expectedX = defaultPos.x + userOffsetX;
+                const expectedY = defaultPos.y + userOffsetY;
+                
+                const threshold = 2;
+                const diffX = Math.abs(currentX - expectedX);
+                const diffY = Math.abs(currentY - expectedY);
+                
+                if (diffX > threshold || diffY > threshold) {
+                    console.log('[Juggl Debug] User drag detected at start of graph movement');
+                    console.log(`[Juggl Debug] Position diff: X=${diffX.toFixed(1)}, Y=${diffY.toFixed(1)}`);
+                    userOffsetX = currentX - defaultPos.x;
+                    userOffsetY = currentY - defaultPos.y;
+                    console.log(`[Juggl Debug] New offset: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
+                }
             }
+            isGraphMoving = true;
+            
+            // Clear any previous timeout
+            clearTimeout(movementTimeout);
+            
+            // After 100ms of no movement, declare the graph stationary
+            movementTimeout = setTimeout(() => {
+                console.log('[Juggl Debug] Graph movement stopped');
+                isGraphMoving = false;
+            }, 100);
+            
+            // Update position immediately for smooth following
+            updatePosition();
         };
-        
-        // Detect when user finishes dragging and update offset
-        const handleMouseUp = (e: MouseEvent) => {
-            if (!isUserDragging) return;
-            
-            isUserDragging = false;
-            
-            // Get current positions
-            const currentX = parseFloat(popover.style.left) || 0;
-            const currentY = parseFloat(popover.style.top) || 0;
-            const boundingBox = node.renderedBoundingBox();
-            const popoverWidth = popover.offsetWidth;
-            const popoverHeight = popover.offsetHeight;
-            const centerX = (boundingBox.x1 + boundingBox.x2) / 2;
-            const centerY = (boundingBox.y1 + boundingBox.y2) / 2;
-            const defaultX = centerX - popoverWidth / 2;
-            const defaultY = centerY - popoverHeight / 2;
-            
-            // Calculate and save the new offset
-            userOffsetX = currentX - defaultX;
-            userOffsetY = currentY - defaultY;
-            console.log(`[Juggl Debug] User drag ended. New offset: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
-        };
-        
-        // Add drag detection listeners
-        // Listen on document during CAPTURE phase to intercept before stopPropagation
-        document.addEventListener('mousedown', handleMouseDown, true);  // true = capture phase
-        document.addEventListener('mouseup', handleMouseUp);
 
         // Initial positioning
         updatePosition();
         
-        // Update position when node moves or graph transforms
-        node.on('position', updatePosition);
-        node.cy().on('pan zoom resize', updatePosition);
+        // Listen for graph movements using the debounced handler
+        node.on('position', onGraphMovement);
+        node.cy().on('pan zoom resize', onGraphMovement);
         
-        // Store tracking info with handlers for cleanup
-        this.hoverEditorTracking.set(terminalId, {
+        // Store tracking info
+        const tracking: HoverEditorTracking = {
             popover,
             node,
             updatePosition,
-            handleMouseDown,
-            handleMouseUp
-        });
+            onGraphMovement,
+            movementTimeout
+        };
+        this.hoverEditorTracking.set(terminalId, tracking);
         
         // Clean up when popover is removed
         const observer = new MutationObserver((mutations) => {
@@ -155,13 +160,14 @@ export class TerminalHoverEditorPositioning {
     cleanupHoverEditorTracking(terminalId: string): void {
         const tracking = this.hoverEditorTracking.get(terminalId);
         if (tracking) {
-            // Remove Cytoscape event listeners
-            tracking.node.off('position', tracking.updatePosition);
-            tracking.node.cy().off('pan zoom resize', tracking.updatePosition);
+            // Clear any pending timeout
+            if (tracking.movementTimeout) {
+                clearTimeout(tracking.movementTimeout);
+            }
             
-            // Remove drag event listeners (must match capture phase)
-            document.removeEventListener('mousedown', tracking.handleMouseDown, true);  // true = capture phase
-            document.removeEventListener('mouseup', tracking.handleMouseUp);
+            // Remove Cytoscape event listeners
+            tracking.node.off('position', tracking.onGraphMovement);
+            tracking.node.cy().off('pan zoom resize', tracking.onGraphMovement);
             
             // Remove from tracking map
             this.hoverEditorTracking.delete(terminalId);
