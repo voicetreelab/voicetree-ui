@@ -110,7 +110,7 @@ export class WorkspaceMode extends Component implements IAGMode {
             select: async function(ele: NodeSingular) {
               console.log('[Juggl Debug] Hover Editor clicked for:', id.id);
               // Convert terminal to hover editor
-              await plugin.terminalStore.convertTerminalToHoverEditor(id.id);
+              await plugin.terminalStore.convertTerminalToHoverEditor(id.id, ele);
             },
             enabled: true,
           });
@@ -209,7 +209,7 @@ export class WorkspaceMode extends Component implements IAGMode {
 
         const id = VizId.fromNode(e.target);
         if (id.storeId === 'terminal') {
-          await this.view.plugin.terminalStore.convertTerminalToHoverEditor(id.id);
+          await this.view.plugin.terminalStore.convertTerminalToHoverEditor(id.id, e.target);
         }
       }
     });
