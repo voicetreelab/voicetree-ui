@@ -162,17 +162,6 @@ edge[edgeCount] {
     line-opacity: mapData(edgeCount, 1, 10, 0.2, 0.4);
 }
 
-.pinned {
-    shape: rectangle;
-    width: 50px;
-    height: 45px;
-    font-size: 5;
-    text-valign: center;
-    text-max-width: 45px;
-    text-opacity: 1;
-    color: white;
-}
-
 .cy-content {
     padding: 0 !important;
 }

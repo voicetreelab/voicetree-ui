@@ -358,8 +358,9 @@ edge.connected-hover {
 }
 
 node.pinned {
-    border-style: dotted;
+    border-style: solid;
     border-width: 2;
+    border-color: rgba(0, 255, 255, 0.8);
 }
 
 node.hard-filtered,

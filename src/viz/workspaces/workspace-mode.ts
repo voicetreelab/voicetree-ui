@@ -649,6 +649,37 @@ export class WorkspaceMode extends Component implements IAGMode {
     const unlocked = nodes
         .unlock()
         .removeClass(CLASS_PINNED);
+    
+    // Stop any running animations and restore original border
+    unlocked.forEach((node) => {
+      // Mark as inactive
+      node.data('breathingActive', false);
+      
+      // Stop animation if it exists
+      const animation = this.breathingAnimations.get(node.id());
+      if (animation) {
+        animation.stop();
+        this.breathingAnimations.delete(node.id());
+      }
+      
+      // Stop all animations on the node
+      node.stop(true, false);
+      
+      // Restore original border style
+      const originalBorderWidth = node.data('originalBorderWidth') || '2';
+      const originalBorderColor = node.data('originalBorderColor') || '#666';
+      const originalBorderOpacity = node.data('originalBorderOpacity') || '1';
+      
+      node.style({
+        'border-width': originalBorderWidth,
+        'border-color': originalBorderColor,
+        'border-opacity': originalBorderOpacity
+      });
+      
+      // Clean up data
+      node.removeData('breathingActive originalBorderWidth originalBorderColor originalBorderOpacity');
+    });
+    
     this.view.restartLayout();
     this.view.trigger('unpin', unlocked);
   }
@@ -661,8 +692,96 @@ export class WorkspaceMode extends Component implements IAGMode {
     const locked = nodes
         .lock()
         .addClass(CLASS_PINNED);
+    
+    // Add breathing animation to pinned nodes
+    this.addBreathingAnimation(locked);
+    
     this.view.restartLayout();
     this.view.trigger('pin', locked);
+  }
+
+  private breathingAnimations: Map<string, any> = new Map();
+
+  private addBreathingAnimation(nodes: NodeCollection) {
+    nodes.forEach((node) => {
+      // Stop any existing animation for this node
+      const existingAni = this.breathingAnimations.get(node.id());
+      if (existingAni && existingAni.playing()) {
+        existingAni.stop();
+      }
+
+      // Store original styles
+      const originalBorderWidth = node.style('border-width') || '2';
+      const originalBorderColor = node.style('border-color') || 'rgba(0, 255, 255, 0.8)';
+      
+      // Store original values in node data
+      node.data('originalBorderWidth', originalBorderWidth);
+      node.data('originalBorderColor', originalBorderColor);
+      node.data('breathingActive', true);
+      
+      // Create the breathing animation loop
+      this.createBreathingLoop(node);
+    });
+  }
+
+  private createBreathingLoop(node: any) {
+    if (!node.data('breathingActive') || !node.hasClass(CLASS_PINNED)) {
+      this.breathingAnimations.delete(node.id());
+      return;
+    }
+
+    // Create forward animation (expand)
+    const expandAnimation = node.animation({
+      style: {
+        'border-width': 8,
+        'border-color': 'rgba(0, 255, 255, 1)',
+        'border-opacity': 1
+      },
+      duration: 1200,
+      easing: 'ease-in-out-sine'
+    });
+
+    // Store reference
+    this.breathingAnimations.set(node.id(), expandAnimation);
+
+    // Play expand animation
+    expandAnimation
+      .play()
+      .promise('completed')
+      .then(() => {
+        if (!node.data('breathingActive') || !node.hasClass(CLASS_PINNED)) {
+          this.breathingAnimations.delete(node.id());
+          return;
+        }
+
+        // Create contract animation
+        const contractAnimation = node.animation({
+          style: {
+            'border-width': node.data('originalBorderWidth') || '2',
+            'border-color': 'rgba(0, 255, 255, 0.6)',
+            'border-opacity': 0.8
+          },
+          duration: 1200,
+          easing: 'ease-in-out-sine'
+        });
+
+        // Update reference
+        this.breathingAnimations.set(node.id(), contractAnimation);
+
+        return contractAnimation.play().promise('completed');
+      })
+      .then(() => {
+        // Continue the loop
+        if (node.data('breathingActive') && node.hasClass(CLASS_PINNED)) {
+          this.createBreathingLoop(node);
+        } else {
+          this.breathingAnimations.delete(node.id());
+        }
+      })
+      .catch(() => {
+        // Clean up on error
+        this.breathingAnimations.delete(node.id());
+      });
   }
 
   pinSelection() {
