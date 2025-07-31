@@ -20,6 +20,11 @@ import {nodeDangling, nodeFromFile, parseRefCache, VizId} from 'juggl-api';
 
 export const OBSIDIAN_STORE_NAME = 'Obsidian';
 
+// Helper function to transform edge labels for display
+function transformEdgeLabel(label: string): string {
+    return label.replace(/_/g, ' ');
+}
+
 export class ObsidianStore extends Component implements ICoreDataStore {
     plugin: JugglPlugin;
     events: DataStoreEvents;
@@ -59,6 +64,10 @@ export class ObsidianStore extends Component implements ICoreDataStore {
           if (isRefCache) {
               // Add edges for the links appearing in the document
               edge = parseRefCache(ref as ReferenceCache, content, id, srcId, otherId, this.plugin.settings.typedLinkPrefix);
+              // Transform the type label if it exists
+              if (edge && edge.data && edge.data.type) {
+                  edge.data.type = transformEdgeLabel(edge.data.type);
+              }
           }
           else {
               // Add typed edges for the links appearing in the frontmatter
@@ -70,6 +79,10 @@ export class ObsidianStore extends Component implements ICoreDataStore {
                 type = split.slice(0, -1).join();
               else
                 type = link.key;
+              
+              // Keep original type for CSS classes, but transform for display
+              const displayType = transformEdgeLabel(type);
+              
               edge = {
                   group: 'edges',
                   data: {
@@ -78,7 +91,7 @@ export class ObsidianStore extends Component implements ICoreDataStore {
                       target: otherId,
                       context: "",
                       edgeCount: 1,
-                      type
+                      type: displayType
                   } as EdgeDataDefinition,
                   classes: [type, "type-" + type, "type-" + type.replaceAll(" ", "-")]
               } as EdgeDefinition;
