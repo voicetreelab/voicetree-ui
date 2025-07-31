@@ -46,23 +46,63 @@ export class TerminalHoverEditorPositioning {
         const popover = popovers[popovers.length - 1] as HTMLElement;
         console.log(`[Juggl Debug] Found hover editor popover:`, popover);
         
+        // Track user offset
+        let userOffsetX = 0;
+        let userOffsetY = 0;
+        let isFirstUpdate = true;
+        
         // Create position update function
         const updatePosition = () => {
-            const pos = node.renderedPosition();
             const boundingBox = node.renderedBoundingBox();
+            const popoverWidth = popover.offsetWidth;
+            const popoverHeight = popover.offsetHeight;
             
             // Calculate center of the node
             const centerX = (boundingBox.x1 + boundingBox.x2) / 2;
             const centerY = (boundingBox.y1 + boundingBox.y2) / 2;
             
-            // Center the popover on the node's center
-            const x = centerX - popover.offsetWidth / 2;
-            const y = centerY - popover.offsetHeight / 2;
+            // Calculate default position (centered on node)
+            const defaultX = centerX - popoverWidth / 2;
+            const defaultY = centerY - popoverHeight / 2;
+            
+            // Only check for user movement after first update
+            if (!isFirstUpdate) {
+                // Get current position
+                const currentX = parseFloat(popover.style.left) || 0;
+                const currentY = parseFloat(popover.style.top) || 0;
+                
+                // Calculate expected position with current offset
+                const expectedX = defaultX + userOffsetX;
+                const expectedY = defaultY + userOffsetY;
+                
+                // Use threshold to detect deliberate user movement
+                // (pan updates are small, user drags are large)
+                const threshold = 30; // pixels
+                
+                if (Math.abs(currentX - expectedX) > threshold ||
+                    Math.abs(currentY - expectedY) > threshold) {
+                    // User moved it - update offset
+                    userOffsetX = currentX - defaultX;
+                    userOffsetY = currentY - defaultY;
+                    console.log(`[Juggl Debug] User moved hover editor. New offset: ${userOffsetX}, ${userOffsetY}`);
+                }
+            }
+
+            // Apply position with offset
+            const finalX = defaultX + userOffsetX;
+            const finalY = defaultY + userOffsetY;
             
             popover.style.position = 'fixed';
-            popover.style.left = `${x}px`;
-            popover.style.top = `${y}px`;
+            popover.style.left = `${finalX}px`;
+            popover.style.top = `${finalY}px`;
             popover.style.zIndex = '1000';
+            
+            // Update data attributes for hover editor compatibility
+            popover.setAttribute('data-x', finalX.toString());
+            popover.setAttribute('data-y', finalY.toString());
+            
+            // Mark first update as complete
+            isFirstUpdate = false;
         };
         
         // Initial positioning
