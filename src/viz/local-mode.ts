@@ -77,7 +77,7 @@ export class LocalMode extends Component implements IAGMode {
 
           const id = VizId.fromNode(e.target);
           if (id.storeId === 'terminal') {
-            await this.view.plugin.terminalStore.convertTerminalToHoverEditor(id.id);
+            await this.view.plugin.terminalStore.convertTerminalToHoverEditor(id.id, e.target);
           }
         }
       });

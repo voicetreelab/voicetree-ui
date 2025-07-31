@@ -5,11 +5,14 @@ import {
   Core,
 } from 'cytoscape';
 import {
-  IMergedToGraph,
-} from 'juggl-api';
-import {
   CLASSES,
 } from '../constants';
+
+// Define IMergedToGraph interface locally since it's missing from juggl-api
+interface IMergedToGraph {
+  merged: NodeCollection;
+  added: NodeCollection;
+}
 
 export function findOptimalPosition(parentNode: any, newNode: any): {x: number, y: number} {
   const parentPos = parentNode.position();

@@ -329,10 +329,11 @@ ${edge.data.context}`;
         const edges = await view.buildEdges(node);
         correctEdges = view.mergeToGraph(edges, true, false);
       }
-      // Remove outgoing edges that no longer exist.
-      const removed = node.connectedEdges()
+      // Remove outgoing edges that no longer exist, but preserve terminal edges
+      const edgesToRemove = node.connectedEdges()
           .difference(correctEdges.merged)
-          .remove();
+          .filter((edge) => !edge.hasClass('terminal-connection'));
+      const removed = edgesToRemove.remove();
       if (removed.length > 0 || correctEdges.added.length > 0) {
         view.onGraphChanged(true, true);
       }

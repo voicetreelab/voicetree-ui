@@ -28,6 +28,12 @@ export class TerminalDataStore extends Component implements IDataStore {
     plugin: IJugglPlugin;
     events: DataStoreEvents;
     terminals: Map<string, TerminalState> = new Map();
+    // Track hover editors and their associated terminal nodes
+    hoverEditorTracking: Map<string, {
+        popover: HTMLElement;
+        node: any;
+        updatePosition: () => void;
+    }> = new Map();
 
     constructor(plugin: IJugglPlugin) {
         super();
@@ -373,7 +379,7 @@ echo "────────────────────────�
     }
 
     // Method to convert terminal leaf to hover editor
-    async convertTerminalToHoverEditor(terminalId: string): Promise<void> {
+    async convertTerminalToHoverEditor(terminalId: string, node?: any): Promise<void> {
         console.log(`[Juggl Debug] Converting terminal to hover editor: ${terminalId}`);
         const terminal = this.terminals.get(terminalId);
         if (!terminal) {
@@ -405,6 +411,11 @@ echo "────────────────────────�
             if (hoverEditorPlugin.convertLeafToPopover && typeof hoverEditorPlugin.convertLeafToPopover === 'function') {
                 await hoverEditorPlugin.convertLeafToPopover(leafToConvert);
                 console.log(`[Juggl Debug] Terminal ${terminalId} converted to hover editor.`);
+                
+                // If we have a node, try to pin the hover editor to it
+                if (node) {
+                    this.pinHoverEditorToNode(terminalId, node);
+                }
             } else {
                 console.error('[Juggl Debug] convertLeafToPopover method not found on hover editor plugin.');
             }
@@ -445,9 +456,27 @@ echo "────────────────────────�
         this.plugin.activeGraphs().forEach(async (graph) => {
             if (graph && graph.viz) {
                 const terminalNodeDef = this.createNodeDefinition(terminalState);
-                const terminalNode = graph.viz.add(terminalNodeDef);
                 
+                // If we have a source node, add linkedNodeIds to help with positioning
                 if (sourceNode) {
+                    const sourceId = VizId.fromNode(sourceNode).toId();
+                    const sourceVizId = VizId.fromNode(sourceNode);
+                    // Use the full VizId string format that includes store ID
+                    terminalNodeDef.data.linkedNodeIds = [sourceId];
+                    console.log('[Juggl Terminal Debug] Source node ID:', sourceId);
+                    console.log('[Juggl Terminal Debug] Source VizId:', sourceVizId);
+                    console.log('[Juggl Terminal Debug] Terminal node def with linkedNodeIds:', terminalNodeDef);
+                } else {
+                    console.log('[Juggl Terminal Debug] No source node provided!');
+                }
+                
+                console.log('[Juggl Terminal Debug] Calling mergeToGraph for terminal node');
+                // Use mergeToGraph for proper positioning
+                const mergeResult = graph.mergeToGraph([terminalNodeDef], true, false);
+                const terminalNode = mergeResult.added.nodes()[0];
+                console.log('[Juggl Terminal Debug] Terminal node added:', terminalNode?.id());
+                
+                if (sourceNode && terminalNode) {
                     const sourceId = VizId.fromNode(sourceNode).toId();
                     const terminalId = new VizId(terminalState.id, this.storeId()).toId();
                     
@@ -464,11 +493,99 @@ echo "────────────────────────�
                         classes: ['terminal-connection', 'type-terminal']
                     };
                     
-                    graph.viz.add(edge);
+                    console.log('[Juggl Terminal Debug] Adding edge from', sourceId, 'to', terminalId);
+                    // Also use mergeToGraph for the edge
+                    graph.mergeToGraph([edge], true, false);
                 }
 
+                console.log('[Juggl Terminal Debug] Triggering onGraphChanged');
                 graph.onGraphChanged(true, true);
             }
         });
+    }
+
+    // Method to pin hover editor to a node
+    private pinHoverEditorToNode(terminalId: string, node: any): void {
+        console.log(`[Juggl Debug] Attempting to pin hover editor to node for terminal: ${terminalId}`);
+        
+        // Wait a bit for the hover editor to be created
+        setTimeout(() => {
+            // Find the hover editor popover in the DOM
+            // Try multiple possible selectors for hover editor
+            let popovers = document.querySelectorAll('.hover-editor');
+            if (popovers.length === 0) {
+                popovers = document.querySelectorAll('.popover.hover-popover');
+            }
+            if (popovers.length === 0) {
+                popovers = document.querySelectorAll('.hover-editor-popover');
+            }
+            if (popovers.length === 0) {
+                console.error('[Juggl Debug] No hover editor popover found in DOM');
+                console.log('[Juggl Debug] Available popovers:', document.querySelectorAll('.popover'));
+                return;
+            }
+            
+            // Get the most recent popover (likely the one we just created)
+            const popover = popovers[popovers.length - 1] as HTMLElement;
+            console.log(`[Juggl Debug] Found hover editor popover:`, popover);
+            
+            // Get node position
+            const nodePosition = node.renderedPosition();
+            const nodeBB = node.renderedBoundingBox();
+            
+            // Position the popover relative to the node
+            const updatePosition = () => {
+                const pos = node.renderedPosition();
+                const bb = node.renderedBoundingBox();
+                
+                // Position directly on top of the node with no offset
+                // Center the popover on the node
+                const x = pos.x - popover.offsetWidth / 2;
+                const y = pos.y - popover.offsetHeight / 2;
+                
+                popover.style.position = 'fixed';
+                popover.style.left = `${x}px`;
+                popover.style.top = `${y}px`;
+                popover.style.zIndex = '1000';
+            };
+            
+            // Initial positioning
+            updatePosition();
+            
+            // Update position when node moves or graph transforms
+            node.on('position', updatePosition);
+            node.cy().on('pan zoom resize', updatePosition);
+            
+            // Store the tracking info
+            this.hoverEditorTracking.set(terminalId, {
+                popover,
+                node,
+                updatePosition
+            });
+            
+            // Clean up when popover is removed
+            const observer = new MutationObserver((mutations) => {
+                if (!document.body.contains(popover)) {
+                    console.log(`[Juggl Debug] Hover editor removed for terminal: ${terminalId}`);
+                    this.cleanupHoverEditorTracking(terminalId);
+                    observer.disconnect();
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            
+        }, 500); // Wait 500ms for hover editor to be created
+    }
+    
+    // Clean up hover editor tracking
+    private cleanupHoverEditorTracking(terminalId: string): void {
+        const tracking = this.hoverEditorTracking.get(terminalId);
+        if (tracking) {
+            // Remove event listeners
+            tracking.node.off('position', tracking.updatePosition);
+            tracking.node.cy().off('pan zoom resize', tracking.updatePosition);
+            
+            // Remove from tracking map
+            this.hoverEditorTracking.delete(terminalId);
+        }
     }
 }
