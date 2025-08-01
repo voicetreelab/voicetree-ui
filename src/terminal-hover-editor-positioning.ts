@@ -126,8 +126,8 @@ export class TerminalHoverEditorPositioning {
         const getDefaultPosition = () => {
             // Use Cytoscape's rendered position directly - it handles all transformations correctly
             const boundingBox = node.renderedBoundingBox();
-            const renderedCenterX = (boundingBox.x1 + boundingBox.x2) / 2;
-            const renderedCenterY = (boundingBox.y1 + boundingBox.y2) / 2;
+            const renderedLeftX = boundingBox.x1;
+            const renderedTopY = boundingBox.y1;
             
             const currentZoom = node.cy().zoom();
             
@@ -143,12 +143,12 @@ export class TerminalHoverEditorPositioning {
             const userOffsetScreenX = userOffsetXZoomInvariant * currentZoom;
             const userOffsetScreenY = userOffsetYZoomInvariant * currentZoom;
             
-//             console.log(`[Juggl Debug] getDefaultPosition - zoom: ${currentZoom.toFixed(2)}, renderedCenter: (${renderedCenterX.toFixed(0)}, ${renderedCenterY.toFixed(0)}), scaledOffset: (${offsetX.toFixed(0)}, ${offsetY.toFixed(0)}), userOffsetScreen: (${userOffsetScreenX.toFixed(0)}, ${userOffsetScreenY.toFixed(0)})`);
+//             console.log(`[Juggl Debug] getDefaultPosition - zoom: ${currentZoom.toFixed(2)}, renderedCenter: (${renderedLeftX.toFixed(0)}, ${renderedTopY.toFixed(0)}), scaledOffset: (${offsetX.toFixed(0)}, ${offsetY.toFixed(0)}), userOffsetScreen: (${userOffsetScreenX.toFixed(0)}, ${userOffsetScreenY.toFixed(0)})`);
             
             // Apply both base offsets and user offsets
             return {
-                x: renderedCenterX + offsetX + userOffsetScreenX,
-                y: renderedCenterY + offsetY + userOffsetScreenY
+                x: renderedLeftX + offsetX + userOffsetScreenX,
+                y: renderedTopY + offsetY + userOffsetScreenY
             };
         };
 
@@ -206,17 +206,20 @@ export class TerminalHoverEditorPositioning {
 //                     lastZoom = currentZoom;
 //                 } else {
                     // Check for user drag BEFORE we start moving
+
+                    // POSITION OF HOVER EDITOR
                     const currentX = parseFloat(popover.style.left) || 0;
                     const currentY = parseFloat(popover.style.top) || 0;
                     
                     // Calculate expected position WITHOUT user offsets for comparison
+                    // this is the position of the TERMINAL NODE, NOT THE HOVER EDITOR
                     const boundingBox = node.renderedBoundingBox();
-                    const renderedCenterX = (boundingBox.x1 + boundingBox.x2) / 2;
-                    const renderedCenterY = (boundingBox.y1 + boundingBox.y2) / 2;
+                    const renderedLeftX = boundingBox.x1;
+                    const renderedTopY = boundingBox.y1;
 
                     // Now add scaled user offsets to get expected position
-                    const expectedX = renderedCenterX + (userOffsetXZoomInvariant * currentZoom);
-                    const expectedY = renderedCenterY + (userOffsetYZoomInvariant * currentZoom);
+                    const expectedX = renderedLeftX + (userOffsetXZoomInvariant * currentZoom);
+                    const expectedY = renderedTopY + (userOffsetYZoomInvariant * currentZoom);
                     
                     const threshold = 2;
                     const diffX = Math.abs(currentX - expectedX);
@@ -227,8 +230,8 @@ export class TerminalHoverEditorPositioning {
                         console.log(`[Juggl Debug] Position diff: X=${diffX.toFixed(1)}, Y=${diffY.toFixed(1)}`);
                         // Convert screen pixel offset to graph units
                         // Offset = (current position - base position) / zoom
-                        userOffsetXZoomInvariant = (currentX - renderedCenterX) / currentZoom;
-                        userOffsetYZoomInvariant = (currentY - renderedCenterY) / currentZoom;
+                        userOffsetXZoomInvariant = (currentX - renderedLeftX) / currentZoom;
+                        userOffsetYZoomInvariant = (currentY - renderedTopY) / currentZoom;
                         console.log(`[Juggl Debug] New offset in graph units: ${userOffsetXZoomInvariant.toFixed(0)}, ${userOffsetYZoomInvariant.toFixed(0)}`);
 //                         console.log(`[Juggl Debug] (was ${(currentX - expectedBaseX).toFixed(0)}, ${(currentY - expectedBaseY).toFixed(0)} screen pixels at zoom ${currentZoom.toFixed(2)})`)
                     }
