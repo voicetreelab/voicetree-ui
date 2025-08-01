@@ -117,6 +117,9 @@ export class TerminalHoverEditorPositioning {
          // is not what we would expect based off of the current pan + zoom
          // if it's different, we change our base offsets and base size
 
+
+         // IMPORTANT, zoom events are AROUND A FOCAL POINT
+
         // Calculate default position
         const getDefaultPosition = () => {
             // Use Cytoscape's rendered position directly - it handles all transformations correctly
