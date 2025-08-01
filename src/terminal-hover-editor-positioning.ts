@@ -65,8 +65,8 @@ export class TerminalHoverEditorPositioning {
         //IMPORTANT the base dimensions, is the size the hover editor opens at initially. but this is already AT
         //     A PARTICULAR ZOOM. e.g. we may be opening hover editor at zoom 5
 
-        const baseWidthZoomInvariant = (popover.offsetWidth / initialZoom) ;
-        const baseHeightZoomInvariant = (popover.offsetHeight / initialZoom) ;
+        let baseWidthZoomInvariant = (popover.offsetWidth / initialZoom) ;
+        let baseHeightZoomInvariant = (popover.offsetHeight / initialZoom) ;
         let resizeScaleFactorWidth = 1;
         let resizeScaleFactorHeight = 1;
 
@@ -227,10 +227,10 @@ export class TerminalHoverEditorPositioning {
                         console.log(`[Juggl Debug] Position diff: X=${diffX.toFixed(1)}, Y=${diffY.toFixed(1)}`);
                         // Convert screen pixel offset to graph units
                         // Offset = (current position - base position) / zoom
-                        userOffsetXZoomInvariant = (currentX - expectedX) / currentZoom;
-                        userOffsetYZoomInvariant = (currentY - expectedY) / currentZoom;
+                        userOffsetXZoomInvariant = (currentX - renderedCenterX) / currentZoom;
+                        userOffsetYZoomInvariant = (currentY - renderedCenterY) / currentZoom;
                         console.log(`[Juggl Debug] New offset in graph units: ${userOffsetXZoomInvariant.toFixed(0)}, ${userOffsetYZoomInvariant.toFixed(0)}`);
-                        console.log(`[Juggl Debug] (was ${(currentX - expectedBaseX).toFixed(0)}, ${(currentY - expectedBaseY).toFixed(0)} screen pixels at zoom ${currentZoom.toFixed(2)})`)
+//                         console.log(`[Juggl Debug] (was ${(currentX - expectedBaseX).toFixed(0)}, ${(currentY - expectedBaseY).toFixed(0)} screen pixels at zoom ${currentZoom.toFixed(2)})`)
                     }
                     
                     // Check for manual resize BEFORE we update
@@ -252,7 +252,6 @@ export class TerminalHoverEditorPositioning {
                         // Calculate new resize scale factors
                         baseWidthZoomInvariant = currentWidth / ( currentZoom);
                         baseHeightZoomInvariant = currentHeight / ( currentZoom);
-                        console.log(`[Juggl Debug] New resize scale factors: W=${resizeScaleFactorWidth.toFixed(2)}, H=${resizeScaleFactorHeight.toFixed(2)}`);
                     }
 //                 }
             }
