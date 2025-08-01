@@ -540,7 +540,7 @@ export class Juggl extends Component implements IJuggl {
 
 
     mergeToGraph(elements: ElementDefinition[], batch=true, triggerGraphChanged=true, parentNodes?: NodeCollection, nodeCache?: any): IMergedToGraph {
-      return mergeToGraphUtil(
+      const result = mergeToGraphUtil(
         this.viz,
         elements,
         batch,
@@ -550,6 +550,15 @@ export class Juggl extends Component implements IJuggl {
         (batch) => this.onGraphChanged(batch),
         (viz, newNodes, parentNodes) => this.setInitialNodePositions(newNodes, parentNodes)
       );
+      
+      // Trigger event for newly added nodes so breathing animation can be applied
+      const newNodes = result.added.nodes();
+      if (newNodes.length > 0) {
+        console.log('[Juggl] Triggering newNodesAdded event for', newNodes.length, 'nodes');
+        this.trigger('newNodesAdded', newNodes);
+      }
+      
+      return result;
     }
 
     private setInitialNodePositions(newNodes: NodeCollection, parentNodes?: NodeCollection): void {

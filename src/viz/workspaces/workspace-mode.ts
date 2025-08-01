@@ -19,6 +19,7 @@ import {
 } from '../layout-settings';
 import {icons, pathToSvg} from '../../ui/icons';
 import {WorkspaceModal} from '../../ui/workspace-modal';
+import {BreathingAnimationManager, AnimationType} from '../animations/breathing-animation';
 
 
 class EventRec {
@@ -35,9 +36,12 @@ export class WorkspaceMode extends Component implements IAGMode {
   toolbar: SvelteComponent;
   recursionPreventer = false;
   menu: any;
+  private breathingAnimationManager: BreathingAnimationManager;
+  
   constructor(view: Juggl) {
     super();
     this.view = view;
+    this.breathingAnimationManager = new BreathingAnimationManager();
   }
 
   onload() {
@@ -206,11 +210,12 @@ export class WorkspaceMode extends Component implements IAGMode {
     this.registerCyEvent('mouseover', 'node', async (e: EventObject) => {
       const node = e.target as NodeSingular;
       
-      // Check if this is a pinned node with breathing animation
-      if (node.hasClass(CLASS_PINNED) && node.data('breathingActive')) {
+      // Check if this node has any breathing animation active
+      if (this.breathingAnimationManager.isAnimationActive(node)) {
         // Stop breathing animation when hover is triggered
-        console.log(`[Juggl] Stopping breathing animation due to hover on node ${node.id()}`);
-        this.stopBreathingAnimationForNode(node);
+        const animationType = node.data('animationType') || 'unknown';
+        console.log(`[Juggl] Stopping ${animationType} breathing animation due to hover on node ${node.id()}`);
+        this.breathingAnimationManager.stopAnimationForNode(node);
       }
       
       if (e.originalEvent.metaKey || e.originalEvent.ctrlKey) {
@@ -291,6 +296,16 @@ export class WorkspaceMode extends Component implements IAGMode {
           
           console.log('[Juggl Position Debug] Node position after skipping layout:', addedNode.position());
           
+          // WARNING: This code path may not execute for all new nodes
+          // TODO: Move breathing animation to node positioning logic where we know it executes
+          // Add breathing animation for new node with a delay to ensure node is fully initialized
+          setTimeout(() => {
+            console.log('[Juggl] Adding breathing animation for new node:', addedNode.id());
+            if (this.viz && addedNode && !addedNode.removed()) {
+              this.breathingAnimationManager.addBreathingAnimation(this.viz.collection(addedNode), AnimationType.NEW_NODE);
+            }
+          }, 5000); // Increased delay to ensure node is fully styled
+          
           // Unlock after a short delay to allow user interaction
           if (node.position) {
             setTimeout(() => {
@@ -350,6 +365,16 @@ export class WorkspaceMode extends Component implements IAGMode {
             
             console.log('[Juggl Position Debug] CREATE EVENT - Node position after skipping layout:', addedNode.position());
             
+            // WARNING: This code path may not execute for all new nodes
+            // TODO: Move breathing animation to node positioning logic where we know it executes
+            // Add breathing animation for new node with a delay to ensure node is fully initialized
+            setTimeout(() => {
+              console.log('[Juggl] Adding breathing animation for new node (create event):', addedNode.id());
+              if (this.viz && addedNode && !addedNode.removed()) {
+                this.breathingAnimationManager.addBreathingAnimation(this.viz.collection(addedNode), AnimationType.NEW_NODE);
+              }
+            }, 500); // Increased delay to ensure node is fully styled
+            
             // Unlock after a short delay to allow user interaction
             if (node.position) {
               setTimeout(() => {
@@ -371,6 +396,30 @@ export class WorkspaceMode extends Component implements IAGMode {
 
     this.registerEvent(this.view.on('expand', (expanded) => {
       this.updateActiveNode(expanded, false);
+    }));
+
+    // Handle appended content animation
+    this.registerEvent(this.view.on('nodeContentAppended', (node) => {
+      console.log('[Juggl] Handling appended content animation for node:', node.id());
+      this.breathingAnimationManager.addBreathingAnimation(node, AnimationType.APPENDED_CONTENT);
+    }));
+    
+    // Handle new nodes added animation
+    this.registerEvent(this.view.on('newNodesAdded', (newNodes) => {
+      console.log('[Juggl] Handling breathing animation for newly added nodes:', newNodes.length);
+      // Add a longer delay to ensure nodes are fully styled by Cytoscape
+      // This is needed because new nodes need time for stylesheet application
+      // while appended nodes already have styles when the animation is triggered
+      setTimeout(() => {
+        newNodes.forEach((node: NodeSingular) => {
+          // Only add animation if the node doesn't already have one
+          if (!this.breathingAnimationManager.isAnimationActive(node)) {
+            console.log('[Juggl] Adding breathing animation for new node:', node.id());
+            console.log('[Juggl] Node style check - border-width:', node.style('border-width'), 'background-color:', node.style('background-color'));
+            this.breathingAnimationManager.addBreathingAnimation(this.viz.collection(node), AnimationType.NEW_NODE);
+          }
+        });
+      }, 1500); // Increased delay to allow stylesheet application
     }));
 
     // TODO: Fix orphan removal causing infinite loop with metadata refresh
@@ -463,6 +512,8 @@ export class WorkspaceMode extends Component implements IAGMode {
     if (this.menu) {
       this.menu.destroy();
     }
+    // Clean up breathing animation manager
+    this.breathingAnimationManager.destroy();
   }
 
   getName(): string {
@@ -660,12 +711,7 @@ export class WorkspaceMode extends Component implements IAGMode {
         .removeClass(CLASS_PINNED);
     
     // Stop any running animations and restore original border
-    unlocked.forEach((node) => {
-      this.stopBreathingAnimationForNode(node);
-      
-      // Clean up data
-      node.removeData('breathingActive originalBorderWidth originalBorderColor originalBorderOpacity');
-    });
+    this.breathingAnimationManager.stopAllAnimations(unlocked);
     
     this.view.restartLayout();
     this.view.trigger('unpin', unlocked);
@@ -681,144 +727,13 @@ export class WorkspaceMode extends Component implements IAGMode {
         .addClass(CLASS_PINNED);
     
     // Add breathing animation to pinned nodes
-    this.addBreathingAnimation(locked);
+    this.breathingAnimationManager.addBreathingAnimation(locked, AnimationType.PINNED);
     
     this.view.restartLayout();
     this.view.trigger('pin', locked);
   }
 
-  private breathingAnimations: Map<string, any> = new Map();
-  private breathingTimeouts: Map<string, NodeJS.Timeout> = new Map();
-
-  private addBreathingAnimation(nodes: NodeCollection) {
-    nodes.forEach((node) => {
-      const nodeId = node.id();
-      
-      // Stop any existing animation for this node
-      this.stopBreathingAnimation(nodeId);
-
-      // Store original styles
-      const originalBorderWidth = node.style('border-width') || '2';
-      const originalBorderColor = node.style('border-color') || 'rgba(0, 255, 255, 0.8)';
-      
-      // Store original values in node data
-      node.data('originalBorderWidth', originalBorderWidth);
-      node.data('originalBorderColor', originalBorderColor);
-      node.data('breathingActive', true);
-      
-      // Create the breathing animation loop
-      this.createBreathingLoop(node);
-      
-      // Set 15-second timeout to stop the animation
-      const timeout = setTimeout(() => {
-        console.log(`[Juggl] Stopping breathing animation for node ${nodeId} after 15 seconds`);
-        this.stopBreathingAnimationForNode(node);
-      }, 15000);
-      
-      this.breathingTimeouts.set(nodeId, timeout);
-    });
-  }
-
-  private createBreathingLoop(node: any) {
-    if (!node.data('breathingActive') || !node.hasClass(CLASS_PINNED)) {
-      this.breathingAnimations.delete(node.id());
-      return;
-    }
-
-    // Create forward animation (expand) - now only goes to 5px instead of 8px
-    const expandAnimation = node.animation({
-      style: {
-        'border-width': 5,
-        'border-color': 'rgba(0, 255, 255, 0.9)',
-        'border-opacity': 0.9
-      },
-      duration: 1200,
-      easing: 'ease-in-out-sine'
-    });
-
-    // Store reference
-    this.breathingAnimations.set(node.id(), expandAnimation);
-
-    // Play expand animation
-    expandAnimation
-      .play()
-      .promise('completed')
-      .then(() => {
-        if (!node.data('breathingActive') || !node.hasClass(CLASS_PINNED)) {
-          this.breathingAnimations.delete(node.id());
-          return;
-        }
-
-        // Create contract animation
-        const contractAnimation = node.animation({
-          style: {
-            'border-width': node.data('originalBorderWidth') || '2',
-            'border-color': 'rgba(0, 255, 255, 0.6)',
-            'border-opacity': 0.8
-          },
-          duration: 1200,
-          easing: 'ease-in-out-sine'
-        });
-
-        // Update reference
-        this.breathingAnimations.set(node.id(), contractAnimation);
-
-        return contractAnimation.play().promise('completed');
-      })
-      .then(() => {
-        // Continue the loop
-        if (node.data('breathingActive') && node.hasClass(CLASS_PINNED)) {
-          this.createBreathingLoop(node);
-        } else {
-          this.breathingAnimations.delete(node.id());
-        }
-      })
-      .catch(() => {
-        // Clean up on error
-        this.breathingAnimations.delete(node.id());
-      });
-  }
-
   pinSelection() {
     this.pin(this.viz.nodes(':selected'));
-  }
-
-  private stopBreathingAnimation(nodeId: string) {
-    // Clear timeout
-    const timeout = this.breathingTimeouts.get(nodeId);
-    if (timeout) {
-      clearTimeout(timeout);
-      this.breathingTimeouts.delete(nodeId);
-    }
-    
-    // Stop animation
-    const animation = this.breathingAnimations.get(nodeId);
-    if (animation && animation.playing()) {
-      animation.stop();
-    }
-    this.breathingAnimations.delete(nodeId);
-  }
-
-  private stopBreathingAnimationForNode(node: any) {
-    const nodeId = node.id();
-    
-    // Mark as inactive
-    node.data('breathingActive', false);
-    
-    // Stop animation
-    this.stopBreathingAnimation(nodeId);
-    
-    // Restore original style
-    const originalBorderWidth = node.data('originalBorderWidth') || '2';
-    const originalBorderColor = node.data('originalBorderColor') || 'rgba(0, 255, 255, 0.8)';
-    const originalBorderOpacity = node.data('originalBorderOpacity') || '1';
-    
-    node.style({
-      'border-width': originalBorderWidth,
-      'border-color': originalBorderColor,
-      'border-opacity': originalBorderOpacity
-    });
-    
-    console.log(`[Juggl] Stopped breathing animation for node ${nodeId}`);
   }
 }

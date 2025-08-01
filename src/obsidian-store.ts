@@ -337,6 +337,21 @@ ${edge.data.context}`;
       if (removed.length > 0 || correctEdges.added.length > 0) {
         view.onGraphChanged(true, true);
       }
+      
+      // Check if content was appended (contains +++)
+      const file = this.getFile(id);
+      if (file && view.viz) {
+        try {
+          const content = await this.vault.cachedRead(file);
+          if (content.includes('+++')) {
+            console.log('[Juggl] Detected appended content (+++) in node:', node.id());
+            // Trigger appended content animation event
+            view.trigger('nodeContentAppended', node);
+          }
+        } catch (e) {
+          console.error('[Juggl] Error reading file content:', e);
+        }
+      }
     }
 
     onload() {
