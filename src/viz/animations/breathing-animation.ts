@@ -28,7 +28,7 @@ export class BreathingAnimationManager {
     this.defaultConfigs = new Map([
       [AnimationType.PINNED, {
         duration: 1200,
-        timeout: 15000,
+        timeout: 0,
         expandWidth: 5,
         expandColor: 'rgba(0, 255, 255, 0.9)',
         expandOpacity: 0.9,
@@ -38,8 +38,8 @@ export class BreathingAnimationManager {
       }],
       [AnimationType.NEW_NODE, {
         duration: 1000,
-        timeout: 10000,
-        expandWidth: 6,
+        timeout: 0,
+        expandWidth: 4,
         expandColor: 'rgba(0, 255, 0, 0.9)', // Green for new nodes
         expandOpacity: 0.9,
         contractColor: 'rgba(0, 255, 0, 0.5)',

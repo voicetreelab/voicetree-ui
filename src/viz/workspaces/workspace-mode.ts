@@ -236,164 +236,6 @@ export class WorkspaceMode extends Component implements IAGMode {
       this.view.trigger('selectChange');
     });
 
-    // Register on file open event
-    this.registerEvent(this.view.workspace.on('file-open', async (file) => {
-      if (!this.view.settings.autoAddNodes) {
-        return;
-      }
-      if (!this.viz) {
-        console.warn('[Juggl Debug] workspace file-open - this.viz is null');
-        return;
-      }
-      if (file && this.view.settings.autoAddNodes) {
-        const name = file.name;
-        const id = new VizId(name, 'core');
-        let followImmediate = true;
-        if (this.viz.$id(id.toId()).length === 0) {
-          console.log('[Juggl Position Debug] Creating new node for file:', file.name);
-          const node = await this.view.datastores.coreStore.get(id, this.view);
-          if (!node) {
-            console.log('[Juggl Position Debug] Node data is null, returning');
-            return;
-          }
-          
-          // Don't set position manually - let mergeToGraph handle edge-aware positioning
-          console.log('[Juggl Position Debug] Using mergeToGraph for edge-aware positioning');
-          
-          // Remove any preset position to let the algorithm work
-          delete node.position;
-          
-          // Use mergeToGraph which includes setInitialNodePositions
-          const mergeResult = this.view.mergeToGraph([node], true, false);
-          const addedNode = mergeResult.added.nodes()[0];
-          addedNode.addClass(CLASS_PROTECTED);
-          
-          console.log('[Juggl Position Debug] Node added, current position:', addedNode.position());
-          
-          // IMPORTANT: Set position after adding to graph
-          if (node.position) {
-            console.log('[Juggl Position Debug] Setting position explicitly to:', node.position);
-            addedNode.position(node.position);
-            addedNode.lock();
-            console.log('[Juggl Position Debug] After setting position:', addedNode.position());
-            console.log('[Juggl Position Debug] Node locked:', addedNode.locked());
-          }
-          
-          const edges = await this.view.buildEdges(this.viz.$id(id.toId()));
-          console.log('[Juggl Position Debug] Built edges count:', edges.length);
-          this.viz.add(edges);
-          
-          console.log('[Juggl Position Debug] Skipping layout completely');
-          // Skip layout completely for new nodes
-          // Update node data without triggering layout
-          this.viz.nodes().forEach((node) => {
-            node.data('degree', node.degree(false));
-            node.data('nameLength', node.data('name').length);
-          });
-          this.view.trigger('elementsChange');
-          this.view.searchFilter(this.view.settings.filter);
-          this.view.assignStyleGroups();
-          
-          console.log('[Juggl Position Debug] Node position after skipping layout:', addedNode.position());
-          
-          // WARNING: This code path may not execute for all new nodes
-          // TODO: Move breathing animation to node positioning logic where we know it executes
-          // Add breathing animation for new node with a delay to ensure node is fully initialized
-          setTimeout(() => {
-            console.log('[Juggl] Adding breathing animation for new node:', addedNode.id());
-            if (this.viz && addedNode && !addedNode.removed()) {
-              this.breathingAnimationManager.addBreathingAnimation(this.viz.collection(addedNode), AnimationType.NEW_NODE);
-            }
-          }, 5000); // Increased delay to ensure node is fully styled
-          
-          // Unlock after a short delay to allow user interaction
-          if (node.position) {
-            setTimeout(() => {
-              console.log('[Juggl Position Debug] Unlocking node after delay');
-              if (!addedNode.hasClass(CLASS_PINNED)) {
-                addedNode.unlock();
-              }
-            }, 1000);
-          }
-          
-          this.viz.endBatch();
-          followImmediate = false;
-        }
-        const node = this.viz.$id(id.toId()) as NodeSingular;
-        node.addClass(CLASS_PROTECTED);
-
-        this.updateActiveNode(node, followImmediate && this.view.settings.autoZoom);
-      }
-    }));
-
-    // Auto-protect new markdown files (for VoiceTree orphan nodes)
-    this.registerEvent(this.view.vault.on('create', async (file) => {
-      if (file.extension === 'md' && this.viz) {
-        const id = new VizId(file.name, 'core');
-        if (this.viz.$id(id.toId()).length === 0) {
-          const node = await this.view.datastores.coreStore.get(id, this.view);
-          if (node) {
-            console.log('[Juggl Position Debug] CREATE EVENT - Creating new node for file:', file.name);
-            
-            // Don't set position manually - let mergeToGraph handle edge-aware positioning
-            console.log('[Juggl Position Debug] CREATE EVENT - Using mergeToGraph for edge-aware positioning');
-            
-            // Remove any preset position to let the algorithm work
-            delete node.position;
-            
-            // Use mergeToGraph which includes setInitialNodePositions
-            const mergeResult = this.view.mergeToGraph([node], true, false);
-            const addedNode = mergeResult.added.nodes()[0];
-            addedNode.addClass(CLASS_PROTECTED);
-            
-            console.log('[Juggl Position Debug] CREATE EVENT - Node added, current position:', addedNode.position());
-            
-            const edges = await this.view.buildEdges(this.viz.$id(id.toId()));
-            console.log('[Juggl Position Debug] CREATE EVENT - Built edges count:', edges.length);
-            this.viz.add(edges);
-            
-            console.log('[Juggl Position Debug] CREATE EVENT - Skipping layout completely');
-            // Skip layout completely for new nodes
-            // Update node data without triggering layout
-            this.viz.nodes().forEach((node) => {
-              node.data('degree', node.degree(false));
-              node.data('nameLength', node.data('name').length);
-            });
-            this.view.trigger('elementsChange');
-            this.view.searchFilter(this.view.settings.filter);
-            this.view.assignStyleGroups();
-            
-            console.log('[Juggl Position Debug] CREATE EVENT - Node position after skipping layout:', addedNode.position());
-            
-            // WARNING: This code path may not execute for all new nodes
-            // TODO: Move breathing animation to node positioning logic where we know it executes
-            // Add breathing animation for new node with a delay to ensure node is fully initialized
-            setTimeout(() => {
-              console.log('[Juggl] Adding breathing animation for new node (create event):', addedNode.id());
-              if (this.viz && addedNode && !addedNode.removed()) {
-                this.breathingAnimationManager.addBreathingAnimation(this.viz.collection(addedNode), AnimationType.NEW_NODE);
-              }
-            }, 500); // Increased delay to ensure node is fully styled
-            
-            // Unlock after a short delay to allow user interaction
-            if (node.position) {
-              setTimeout(() => {
-                console.log('[Juggl Position Debug] CREATE EVENT - Unlocking node after delay');
-                if (!addedNode.hasClass(CLASS_PINNED)) {
-                  addedNode.unlock();
-                }
-              }, 1000);
-            }
-            
-            this.viz.endBatch();
-          } else {
-          }
-        } else {
-        }
-      } else {
-      }
-    }));
-
     this.registerEvent(this.view.on('expand', (expanded) => {
       this.updateActiveNode(expanded, false);
     }));
@@ -403,7 +245,9 @@ export class WorkspaceMode extends Component implements IAGMode {
       console.log('[Juggl] Handling appended content animation for node:', node.id());
       this.breathingAnimationManager.addBreathingAnimation(node, AnimationType.APPENDED_CONTENT);
     }));
-    
+
+    // this is called from mergeToGraph in visualization.ts
+
     // Handle new nodes added animation
     this.registerEvent(this.view.on('newNodesAdded', (newNodes) => {
       console.log('[Juggl] Handling breathing animation for newly added nodes:', newNodes.length);
@@ -419,42 +263,8 @@ export class WorkspaceMode extends Component implements IAGMode {
             this.breathingAnimationManager.addBreathingAnimation(this.viz.collection(node), AnimationType.NEW_NODE);
           }
         });
-      }, 1500); // Increased delay to allow stylesheet application
+      }, 1000); // Increased delay to allow stylesheet application
     }));
-
-    // TODO: Fix orphan removal causing infinite loop with metadata refresh
-    // Commenting out orphan removal temporarily to prevent infinite loop
-    // this.registerEvent(this.view.on('elementsChange', () => {
-    //   if (this.recursionPreventer) {
-    //     return;
-    //   }
-    //   
-    //   
-    //   const allNodes = this.viz.nodes();
-    //   const protectedNodes = this.viz.nodes(`.${CLASS_PROTECTED}`);
-    //   const unprotectedNodes = allNodes.difference(protectedNodes);
-    //   
-    //   
-    //   const orphansToRemove = unprotectedNodes.filter((ele) => {
-    //     // If none in the closed neighborhood are expanded.
-    //     // Note that the closed neighborhood includes the current note.
-    //     const hasProtectedNeighbor = ele.closedNeighborhood(`node.${CLASS_PROTECTED}`).length > 0;
-    //     if (!hasProtectedNeighbor) {
-    //     }
-    //     return !hasProtectedNeighbor;
-    //   });
-    //   
-    //   if (orphansToRemove.length > 0) {
-    //     orphansToRemove.forEach(node => {
-    //     });
-    //     orphansToRemove.remove();
-    //   }
-    //   
-    //   this.updateActiveNode(this.viz.nodes(`.${CLASS_ACTIVE_NODE}`), false);
-    //   this.recursionPreventer = true;
-    //   this.view.onGraphChanged();
-    //   this.recursionPreventer = false;
-    // }));
 
     this.windowEvent = async (evt: KeyboardEvent) => {
       if (!(activeDocument.activeElement === this.view.element)) {
