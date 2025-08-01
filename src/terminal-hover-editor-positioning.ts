@@ -6,8 +6,8 @@ export interface HoverEditorTracking {
     updatePosition: () => void;
     onGraphMovement: () => void;
     movementTimeout?: NodeJS.Timeout;
-    baseWidth?: number;
-    baseHeight?: number;
+    baseWidthZoomInvariant?: number;
+    baseHeightZoomInvariant?: number;
     resizeScaleFactorWidth?: number;
     resizeScaleFactorHeight?: number;
 }
@@ -53,8 +53,8 @@ export class TerminalHoverEditorPositioning {
         console.log(`[Juggl Debug] Found hover editor popover:`, popover);
         
         // State management
-        let userOffsetX = 0;  // User offset in GRAPH units
-        let userOffsetY = 0;  // User offset in GRAPH units
+        let userOffsetXZoomInvariant = 0;  // User offset in GRAPH units
+        let userOffsetYZoomInvariant = 0;  // User offset in GRAPH units
         let isGraphMoving = false;
         let movementTimeout: NodeJS.Timeout;
         let lastZoom = node.cy().zoom();
@@ -65,8 +65,8 @@ export class TerminalHoverEditorPositioning {
         //IMPORTANT the base dimensions, is the size the hover editor opens at initially. but this is already AT
         //     A PARTICULAR ZOOM. e.g. we may be opening hover editor at zoom 5
 
-        const baseWidth = (popover.offsetWidth / initialZoom) ;
-        const baseHeight = (popover.offsetHeight / initialZoom) ;
+        const baseWidthZoomInvariant = (popover.offsetWidth / initialZoom) ;
+        const baseHeightZoomInvariant = (popover.offsetHeight / initialZoom) ;
         let resizeScaleFactorWidth = 1;
         let resizeScaleFactorHeight = 1;
 
@@ -119,7 +119,8 @@ export class TerminalHoverEditorPositioning {
          // if it's different, we change our base offsets and base size
 
 
-         // IMPORTANT, zoom events are AROUND A FOCAL POINT
+         // IMPORTANT, zoom events are AROUND A FOCAL POINT, however this should be accounted for
+         // by a pan + zoom (?)
 
         // Calculate default position
         const getDefaultPosition = () => {
@@ -139,8 +140,8 @@ export class TerminalHoverEditorPositioning {
             const offsetY = baseOffsetY * currentZoom;
             
             // Scale user offsets (stored in graph units) to screen pixels
-            const userOffsetScreenX = userOffsetX * currentZoom;
-            const userOffsetScreenY = userOffsetY * currentZoom;
+            const userOffsetScreenX = userOffsetXZoomInvariant * currentZoom;
+            const userOffsetScreenY = userOffsetYZoomInvariant * currentZoom;
             
 //             console.log(`[Juggl Debug] getDefaultPosition - zoom: ${currentZoom.toFixed(2)}, renderedCenter: (${renderedCenterX.toFixed(0)}, ${renderedCenterY.toFixed(0)}), scaledOffset: (${offsetX.toFixed(0)}, ${offsetY.toFixed(0)}), userOffsetScreen: (${userOffsetScreenX.toFixed(0)}, ${userOffsetScreenY.toFixed(0)})`);
             
@@ -170,16 +171,16 @@ export class TerminalHoverEditorPositioning {
             popover.setAttribute('data-y', finalY.toString());
             
             // Apply zoom-based resizing with user's resize preference
-            const currentZoom = node.cy().zoom();
-            const scaledWidth = baseWidth * currentZoom * resizeScaleFactorWidth;
-            const scaledHeight = baseHeight * currentZoom * resizeScaleFactorHeight;
-            
             // Apply size with constraints - smaller minimum when zoomed out
-            const finalWidth = Math.max(50, Math.min(800, scaledWidth));
-            const finalHeight = Math.max(38, Math.min(1200, scaledHeight));
-            
-            popover.style.width = `${finalWidth}px`;
-            popover.style.height = `${finalHeight}px`;
+
+            const currentZoom = node.cy().zoom();
+            const scaledWidth = Math.max(50, Math.min(800, baseWidthZoomInvariant * currentZoom));
+            const scaledHeight = Math.max(38, Math.min(1200, baseHeightZoomInvariant * currentZoom));
+
+           // ^ that can introduce bug if we don't account for this later in user resizing logic
+
+            popover.style.width = `${scaledWidth}px`;
+            popover.style.height = `${scaledHeight}px`;
         };
 
         // Debounced graph movement handler
@@ -200,10 +201,10 @@ export class TerminalHoverEditorPositioning {
 //                 console.log('[Juggl Debug] Graph movement started');
                 
                 // During zoom, skip drag/resize detection but still update position
-                if (zoomChanged) {
-//                     console.log('[Juggl Debug] Zoom detected, updating position without drag/resize detection');
-                    lastZoom = currentZoom;
-                } else {
+//                 if (zoomChanged) {
+// //                     console.log('[Juggl Debug] Zoom detected, updating position without drag/resize detection');
+//                     lastZoom = currentZoom;
+//                 } else {
                     // Check for user drag BEFORE we start moving
                     const currentX = parseFloat(popover.style.left) || 0;
                     const currentY = parseFloat(popover.style.top) || 0;
@@ -212,14 +213,10 @@ export class TerminalHoverEditorPositioning {
                     const boundingBox = node.renderedBoundingBox();
                     const renderedCenterX = (boundingBox.x1 + boundingBox.x2) / 2;
                     const renderedCenterY = (boundingBox.y1 + boundingBox.y2) / 2;
-                    const baseOffsetX = 0;
-                    const baseOffsetY = 0;
-                    const expectedBaseX = renderedCenterX + (baseOffsetX * currentZoom);
-                    const expectedBaseY = renderedCenterY + (baseOffsetY * currentZoom);
-                    
+
                     // Now add scaled user offsets to get expected position
-                    const expectedX = expectedBaseX + (userOffsetX * currentZoom);
-                    const expectedY = expectedBaseY + (userOffsetY * currentZoom);
+                    const expectedX = renderedCenterX + (userOffsetXZoomInvariant * currentZoom);
+                    const expectedY = renderedCenterY + (userOffsetYZoomInvariant * currentZoom);
                     
                     const threshold = 2;
                     const diffX = Math.abs(currentX - expectedX);
@@ -230,9 +227,9 @@ export class TerminalHoverEditorPositioning {
                         console.log(`[Juggl Debug] Position diff: X=${diffX.toFixed(1)}, Y=${diffY.toFixed(1)}`);
                         // Convert screen pixel offset to graph units
                         // Offset = (current position - base position) / zoom
-                        userOffsetX = (currentX - expectedBaseX) / currentZoom;
-                        userOffsetY = (currentY - expectedBaseY) / currentZoom;
-                        console.log(`[Juggl Debug] New offset in graph units: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
+                        userOffsetXZoomInvariant = (currentX - expectedX) / currentZoom;
+                        userOffsetYZoomInvariant = (currentY - expectedY) / currentZoom;
+                        console.log(`[Juggl Debug] New offset in graph units: ${userOffsetXZoomInvariant.toFixed(0)}, ${userOffsetYZoomInvariant.toFixed(0)}`);
                         console.log(`[Juggl Debug] (was ${(currentX - expectedBaseX).toFixed(0)}, ${(currentY - expectedBaseY).toFixed(0)} screen pixels at zoom ${currentZoom.toFixed(2)})`)
                     }
                     
@@ -241,8 +238,8 @@ export class TerminalHoverEditorPositioning {
                     const currentHeight = popover.offsetHeight;
 
                     // Calculate expected size using the same logic as updatePosition
-                    const expectedWidth = Math.max(50, Math.min(800, baseWidth * currentZoom * resizeScaleFactorWidth));
-                    const expectedHeight = Math.max(38, Math.min(1200, baseHeight * currentZoom * resizeScaleFactorHeight));
+                    const expectedWidth = Math.max(50, Math.min(800, baseWidthZoomInvariant * currentZoom));
+                    const expectedHeight = Math.max(38, Math.min(1200, baseHeightZoomInvariant * currentZoom));
                     
                     const widthDiff = Math.abs(currentWidth - expectedWidth);
                     const heightDiff = Math.abs(currentHeight - expectedHeight);
@@ -253,11 +250,11 @@ export class TerminalHoverEditorPositioning {
                         console.log(`[Juggl Debug] Size diff: W=${widthDiff.toFixed(1)}, H=${heightDiff.toFixed(1)}`);
                         
                         // Calculate new resize scale factors
-                        resizeScaleFactorWidth = currentWidth / (baseWidth * currentZoom);
-                        resizeScaleFactorHeight = currentHeight / (baseHeight * currentZoom);
+                        baseWidthZoomInvariant = currentWidth / ( currentZoom);
+                        baseHeightZoomInvariant = currentHeight / ( currentZoom);
                         console.log(`[Juggl Debug] New resize scale factors: W=${resizeScaleFactorWidth.toFixed(2)}, H=${resizeScaleFactorHeight.toFixed(2)}`);
                     }
-                }
+//                 }
             }
             isGraphMoving = true;
             
@@ -290,8 +287,8 @@ export class TerminalHoverEditorPositioning {
             updatePosition,
             onGraphMovement,
             movementTimeout,
-            baseWidth,
-            baseHeight,
+            baseWidthZoomInvariant,
+            baseHeightZoomInvariant,
             resizeScaleFactorWidth,
             resizeScaleFactorHeight
         };
@@ -322,7 +319,7 @@ export class TerminalHoverEditorPositioning {
             
             // Remove Cytoscape event listeners
             tracking.node.off('position', tracking.onGraphMovement);
-            tracking.node.cy().off('pan zoom resize', tracking.onGraphMovement);
+            tracking.node.cy().off('pan', tracking.onGraphMovement);
             
             // Remove from tracking map
             this.hoverEditorTracking.delete(terminalId);
