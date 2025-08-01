@@ -243,6 +243,12 @@ export class WorkspaceMode extends Component implements IAGMode {
     // Handle appended content animation
     this.registerEvent(this.view.on('nodeContentAppended', (node) => {
       console.log('[Juggl] Handling appended content animation for node:', node.id());
+      
+      // Log current style to debug
+      console.log('[Juggl] Appended node current style - border-width:', node.style('border-width'), 'border-color:', node.style('border-color'));
+      
+      // For appended content, the node already exists and has styles, so we can add animation immediately
+      // But we should ensure we're not capturing a temporary style
       this.breathingAnimationManager.addBreathingAnimation(node, AnimationType.APPENDED_CONTENT);
     }));
 

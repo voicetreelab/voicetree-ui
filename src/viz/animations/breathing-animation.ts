@@ -25,28 +25,10 @@ export class BreathingAnimationManager {
 
   constructor() {
     // Set up different configurations for each animation type
+
+
     this.defaultConfigs = new Map([
       [AnimationType.PINNED, {
-        duration: 1200,
-        timeout: 0,
-        expandWidth: 5,
-        expandColor: 'rgba(0, 255, 255, 0.9)',
-        expandOpacity: 0.9,
-        contractColor: 'rgba(0, 255, 255, 0.6)',
-        contractOpacity: 0.8,
-        type: AnimationType.PINNED
-      }],
-      [AnimationType.NEW_NODE, {
-        duration: 1000,
-        timeout: 0,
-        expandWidth: 4,
-        expandColor: 'rgba(0, 255, 0, 0.9)', // Green for new nodes
-        expandOpacity: 0.9,
-        contractColor: 'rgba(0, 255, 0, 0.5)',
-        contractOpacity: 0.7,
-        type: AnimationType.NEW_NODE
-      }],
-      [AnimationType.APPENDED_CONTENT, {
         duration: 800,
         timeout: 0, // Run forever until hover
         expandWidth: 4,
@@ -54,6 +36,26 @@ export class BreathingAnimationManager {
         expandOpacity: 0.8,
         contractColor: 'rgba(255, 165, 0, 0.4)',
         contractOpacity: 0.6,
+        type: AnimationType.APPENDED_CONTENT
+      }],
+      [AnimationType.NEW_NODE, {
+        duration: 1000,
+        timeout: 0,
+        expandWidth: 4,
+        expandColor: 'rgba(0, 255, 0, 0.9)', // Green for new nodes
+        expandOpacity: 0.8,
+        contractColor: 'rgba(0, 255, 0, 0.5)',
+        contractOpacity: 0.7,
+        type: AnimationType.NEW_NODE
+      }],
+      [AnimationType.APPENDED_CONTENT, {
+        duration: 1200,
+        timeout: 0,
+        expandWidth: 4,
+        expandColor: 'rgba(0, 255, 255, 0.9)',
+        expandOpacity: 0.8,
+        contractColor: 'rgba(0, 255, 255, 0.6)',
+        contractOpacity: 0.7,
         type: AnimationType.APPENDED_CONTENT
       }]
     ]);
@@ -80,11 +82,26 @@ export class BreathingAnimationManager {
       const currentBorderWidth = node.style('border-width');
       const currentBorderColor = node.style('border-color');
       
-      // Use current values if they exist, otherwise use sensible defaults
-      const originalBorderWidth = (currentBorderWidth && currentBorderWidth !== '0px' && currentBorderWidth !== '0') 
-        ? currentBorderWidth : '2';
-      const originalBorderColor = (currentBorderColor && currentBorderColor !== 'rgba(0, 0, 0, 0)') 
-        ? currentBorderColor : 'rgba(128, 128, 128, 0.5)'; // Gray default instead of cyan
+      // For most nodes, the default is no border (border-width: 0)
+      // We should restore to this state after animation unless the node has a specific border
+      let originalBorderWidth = '0'; // Default to no border
+      let originalBorderColor = 'rgba(0, 0, 0, 0)'; // Transparent
+      
+      // Only preserve border if it's explicitly set and visible
+      if (currentBorderWidth && currentBorderWidth !== '0px' && currentBorderWidth !== '0') {
+        // Check if this is a temporary animation color (green, orange, cyan)
+        const isAnimationColor = currentBorderColor && (
+          currentBorderColor.includes('0, 255, 0') || // Green (new nodes)
+          currentBorderColor.includes('255, 165, 0') || // Orange (appended)
+          currentBorderColor.includes('0, 255, 255') // Cyan (pinned)
+        );
+        
+        if (!isAnimationColor) {
+          // Only preserve non-animation colors
+          originalBorderWidth = currentBorderWidth;
+          originalBorderColor = currentBorderColor;
+        }
+      }
       
       // Store the actual original values
       node.data('originalBorderWidth', originalBorderWidth);
@@ -204,9 +221,9 @@ export class BreathingAnimationManager {
     this.stopAnimation(nodeId);
     
     // Restore original style
-    const originalBorderWidth = node.data('originalBorderWidth') || '2';
-    const originalBorderColor = node.data('originalBorderColor') || 'rgba(128, 128, 128, 0.5)';
-    const originalBorderOpacity = node.data('originalBorderOpacity') || '1';
+    const originalBorderWidth = node.data('originalBorderWidth') || '0';
+    const originalBorderColor = node.data('originalBorderColor') || 'rgba(0, 0, 0, 0)';
+    const originalBorderOpacity = node.data('originalBorderOpacity') || '0';
     
     node.style({
       'border-width': originalBorderWidth,
