@@ -53,8 +53,8 @@ export class TerminalHoverEditorPositioning {
         console.log(`[Juggl Debug] Found hover editor popover:`, popover);
         
         // State management
-        let userOffsetX = 0;
-        let userOffsetY = 0;
+        let userOffsetX = 0;  // User offset in GRAPH units
+        let userOffsetY = 0;  // User offset in GRAPH units
         let isGraphMoving = false;
         let movementTimeout: NodeJS.Timeout;
         // Get zoom-independent base dimensions by dividing out the initial zoom
@@ -64,28 +64,87 @@ export class TerminalHoverEditorPositioning {
         let resizeScaleFactorWidth = 1;
         let resizeScaleFactorHeight = 1;
 
+        // Helper function to convert graph coordinates to screen coordinates
+        const convertGraphToScreen = (graphX: number, graphY: number) => {
+            const pan = node.cy().pan();
+            const zoom = node.cy().zoom();
+            return {
+                x: (graphX * zoom) + pan.x,
+                y: (graphY * zoom) + pan.y
+            };
+        };
+
+        /**
+         * COORDINATE SYSTEMS DOCUMENTATION
+         * 
+         * Cytoscape uses two coordinate systems:
+         * 
+         * 1. GRAPH COORDINATES (Model Space)
+         *    - Obtained via: node.position()
+         *    - Fixed coordinates that don't change with zoom/pan
+         *    - Example: A node at graph position (200, 400) stays at (200, 400) regardless of zoom
+         *    - Used for: Graph data model, node relationships, layout algorithms
+         * 
+         * 2. RENDERED/SCREEN COORDINATES (View Space)
+         *    - Obtained via: node.renderedPosition() or node.renderedBoundingBox()
+         *    - Screen pixel coordinates that change with zoom/pan
+         *    - Example: A node at graph (200, 400) might render at screen (500, 600) depending on zoom/pan
+         *    - Used for: Mouse events, DOM positioning, visual rendering
+         * 
+         * HOVER EDITOR POSITIONING:
+         * - The hover editor is a DOM element with position:fixed
+         * - It uses SCREEN COORDINATES (pixels from viewport top-left)
+         * - We must use rendered positions + our offsets
+         * 
+         * COORDINATE CONVERSION:
+         * - Graph to Screen: screenPos = (graphPos * zoom) + pan
+         * - Screen to Graph: graphPos = (screenPos - pan) / zoom
+         * 
+         * OFFSET SCALING:
+         * - Fixed pixel offsets (like +300px) need to scale with zoom to maintain
+         *   constant graph-space distance from the node
+         * - At zoom 0.5x: 300px becomes 150px on screen (same graph distance)
+         * - At zoom 2.0x: 300px becomes 600px on screen (same graph distance)
+         */
+
         // Calculate default position
         const getDefaultPosition = () => {
+            // Use Cytoscape's rendered position directly - it handles all transformations correctly
             const boundingBox = node.renderedBoundingBox();
-            const popoverWidth = popover.offsetWidth;
-            const popoverHeight = popover.offsetHeight;
+            const renderedCenterX = (boundingBox.x1 + boundingBox.x2) / 2;
+            const renderedCenterY = (boundingBox.y1 + boundingBox.y2) / 2;
             
-            // Calculate center of the node
-            const centerX = (boundingBox.x1 + boundingBox.x2) / 2;
-            const centerY = (boundingBox.y1 + boundingBox.y2) / 2;
+            const currentZoom = node.cy().zoom();
             
-            // Calculate default position (centered on node)
+            // Base offsets in graph space (at zoom 1.0)
+            const baseOffsetX = 300;
+            const baseOffsetY = -50;
+            
+            // Scale offsets with zoom to maintain constant graph distance
+            const offsetX = baseOffsetX * currentZoom;
+            const offsetY = baseOffsetY * currentZoom;
+            
+            // Scale user offsets (stored in graph units) to screen pixels
+            const userOffsetScreenX = userOffsetX * currentZoom;
+            const userOffsetScreenY = userOffsetY * currentZoom;
+            
+            console.log(`[Juggl Debug] getDefaultPosition - zoom: ${currentZoom.toFixed(2)}, renderedCenter: (${renderedCenterX.toFixed(0)}, ${renderedCenterY.toFixed(0)}), scaledOffset: (${offsetX.toFixed(0)}, ${offsetY.toFixed(0)}), userOffsetScreen: (${userOffsetScreenX.toFixed(0)}, ${userOffsetScreenY.toFixed(0)})`);
+            
+            // Apply both base offsets and user offsets
             return {
-                x: centerX - popoverWidth / 2 + 300,
-                y: centerY - popoverHeight / 2 - 50
+                x: renderedCenterX + offsetX + userOffsetScreenX,
+                y: renderedCenterY + offsetY + userOffsetScreenY
             };
         };
 
         // Position and size update function
         const updatePosition = () => {
             const defaultPos = getDefaultPosition();
-            const finalX = defaultPos.x + userOffsetX;
-            const finalY = defaultPos.y + userOffsetY;
+            // User offsets are now already applied in getDefaultPosition
+            const finalX = defaultPos.x;
+            const finalY = defaultPos.y;
+            
+            console.log(`[Juggl Debug] Setting popover position: left=${finalX.toFixed(1)}px, top=${finalY.toFixed(1)}px`);
             
             popover.style.position = 'fixed';
             popover.style.left = `${finalX}px`;
@@ -117,8 +176,9 @@ export class TerminalHoverEditorPositioning {
                 const currentX = parseFloat(popover.style.left) || 0;
                 const currentY = parseFloat(popover.style.top) || 0;
                 const defaultPos = getDefaultPosition();
-                const expectedX = defaultPos.x + userOffsetX;
-                const expectedY = defaultPos.y + userOffsetY;
+                // Default position already includes user offsets
+                const expectedX = defaultPos.x;
+                const expectedY = defaultPos.y;
                 
                 const threshold = 2;
                 const diffX = Math.abs(currentX - expectedX);
@@ -127,9 +187,12 @@ export class TerminalHoverEditorPositioning {
                 if (diffX > threshold || diffY > threshold) {
                     console.log('[Juggl Debug] User drag detected at start of graph movement');
                     console.log(`[Juggl Debug] Position diff: X=${diffX.toFixed(1)}, Y=${diffY.toFixed(1)}`);
-                    userOffsetX = currentX - defaultPos.x;
-                    userOffsetY = currentY - defaultPos.y;
-                    console.log(`[Juggl Debug] New offset: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
+                    const currentZoom = node.cy().zoom();
+                    // Convert screen pixel offset to graph units
+                    userOffsetX = (currentX - defaultPos.x) / currentZoom;
+                    userOffsetY = (currentY - defaultPos.y) / currentZoom;
+                    console.log(`[Juggl Debug] New offset in graph units: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
+                    console.log(`[Juggl Debug] (was ${(currentX - defaultPos.x).toFixed(0)}, ${(currentY - defaultPos.y).toFixed(0)} screen pixels at zoom ${currentZoom.toFixed(2)})`)
                 }
                 
                 // Check for manual resize BEFORE we update
