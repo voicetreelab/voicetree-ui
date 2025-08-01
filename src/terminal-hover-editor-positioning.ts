@@ -57,6 +57,7 @@ export class TerminalHoverEditorPositioning {
         let userOffsetY = 0;  // User offset in GRAPH units
         let isGraphMoving = false;
         let movementTimeout: NodeJS.Timeout;
+        let lastZoom = node.cy().zoom();
         // Get zoom-independent base dimensions by dividing out the initial zoom
         const initialZoom = node.cy().zoom();
 
@@ -179,61 +180,70 @@ export class TerminalHoverEditorPositioning {
 
         // Debounced graph movement handler
         const onGraphMovement = () => {
+            const currentZoom = node.cy().zoom();
+            const zoomChanged = Math.abs(currentZoom - lastZoom) > 0.001;
+            
             if (!isGraphMoving) {
                 console.log('[Juggl Debug] Graph movement started');
-                // Check for user drag BEFORE we start moving
-                const currentX = parseFloat(popover.style.left) || 0;
-                const currentY = parseFloat(popover.style.top) || 0;
                 
-                // Calculate expected position WITHOUT user offsets for comparison
-                const boundingBox = node.renderedBoundingBox();
-                const renderedCenterX = (boundingBox.x1 + boundingBox.x2) / 2;
-                const renderedCenterY = (boundingBox.y1 + boundingBox.y2) / 2;
-                const currentZoom = node.cy().zoom();
-                const baseOffsetX = 300;
-                const baseOffsetY = -50;
-                const expectedBaseX = renderedCenterX + (baseOffsetX * currentZoom);
-                const expectedBaseY = renderedCenterY + (baseOffsetY * currentZoom);
-                
-                // Now add scaled user offsets to get expected position
-                const expectedX = expectedBaseX + (userOffsetX * currentZoom);
-                const expectedY = expectedBaseY + (userOffsetY * currentZoom);
-                
-                const threshold = 2;
-                const diffX = Math.abs(currentX - expectedX);
-                const diffY = Math.abs(currentY - expectedY);
-                
-                if (diffX > threshold || diffY > threshold) {
-                    console.log('[Juggl Debug] User drag detected at start of graph movement');
-                    console.log(`[Juggl Debug] Position diff: X=${diffX.toFixed(1)}, Y=${diffY.toFixed(1)}`);
-                    // Convert screen pixel offset to graph units
-                    // Offset = (current position - base position) / zoom
-                    userOffsetX = (currentX - expectedBaseX) / currentZoom;
-                    userOffsetY = (currentY - expectedBaseY) / currentZoom;
-                    console.log(`[Juggl Debug] New offset in graph units: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
-                    console.log(`[Juggl Debug] (was ${(currentX - expectedBaseX).toFixed(0)}, ${(currentY - expectedBaseY).toFixed(0)} screen pixels at zoom ${currentZoom.toFixed(2)})`)
-                }
-                
-                // Check for manual resize BEFORE we update
-                const currentWidth = popover.offsetWidth;
-                const currentHeight = popover.offsetHeight;
-
-                // Calculate expected size using the same logic as updatePosition
-                const expectedWidth = Math.max(50, Math.min(800, baseWidth * currentZoom * resizeScaleFactorWidth));
-                const expectedHeight = Math.max(38, Math.min(1200, baseHeight * currentZoom * resizeScaleFactorHeight));
-                
-                const widthDiff = Math.abs(currentWidth - expectedWidth);
-                const heightDiff = Math.abs(currentHeight - expectedHeight);
-                const sizeThreshold = 5;
-                
-                if (widthDiff > sizeThreshold || heightDiff > sizeThreshold) {
-                    console.log('[Juggl Debug] Manual resize detected at start of graph movement');
-                    console.log(`[Juggl Debug] Size diff: W=${widthDiff.toFixed(1)}, H=${heightDiff.toFixed(1)}`);
+                // During zoom, skip drag/resize detection but still update position
+                if (zoomChanged) {
+                    console.log('[Juggl Debug] Zoom detected, updating position without drag/resize detection');
+                    lastZoom = currentZoom;
+                } else {
+                    // Check for user drag BEFORE we start moving
+                    const currentX = parseFloat(popover.style.left) || 0;
+                    const currentY = parseFloat(popover.style.top) || 0;
                     
-                    // Calculate new resize scale factors
-                    resizeScaleFactorWidth = currentWidth / (baseWidth * currentZoom);
-                    resizeScaleFactorHeight = currentHeight / (baseHeight * currentZoom);
-                    console.log(`[Juggl Debug] New resize scale factors: W=${resizeScaleFactorWidth.toFixed(2)}, H=${resizeScaleFactorHeight.toFixed(2)}`);
+                    // Calculate expected position WITHOUT user offsets for comparison
+                    const boundingBox = node.renderedBoundingBox();
+                    const renderedCenterX = (boundingBox.x1 + boundingBox.x2) / 2;
+                    const renderedCenterY = (boundingBox.y1 + boundingBox.y2) / 2;
+                    const baseOffsetX = 300;
+                    const baseOffsetY = -50;
+                    const expectedBaseX = renderedCenterX + (baseOffsetX * currentZoom);
+                    const expectedBaseY = renderedCenterY + (baseOffsetY * currentZoom);
+                    
+                    // Now add scaled user offsets to get expected position
+                    const expectedX = expectedBaseX + (userOffsetX * currentZoom);
+                    const expectedY = expectedBaseY + (userOffsetY * currentZoom);
+                    
+                    const threshold = 2;
+                    const diffX = Math.abs(currentX - expectedX);
+                    const diffY = Math.abs(currentY - expectedY);
+                    
+                    if (diffX > threshold || diffY > threshold) {
+                        console.log('[Juggl Debug] User drag detected at start of graph movement');
+                        console.log(`[Juggl Debug] Position diff: X=${diffX.toFixed(1)}, Y=${diffY.toFixed(1)}`);
+                        // Convert screen pixel offset to graph units
+                        // Offset = (current position - base position) / zoom
+                        userOffsetX = (currentX - expectedBaseX) / currentZoom;
+                        userOffsetY = (currentY - expectedBaseY) / currentZoom;
+                        console.log(`[Juggl Debug] New offset in graph units: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
+                        console.log(`[Juggl Debug] (was ${(currentX - expectedBaseX).toFixed(0)}, ${(currentY - expectedBaseY).toFixed(0)} screen pixels at zoom ${currentZoom.toFixed(2)})`)
+                    }
+                    
+                    // Check for manual resize BEFORE we update
+                    const currentWidth = popover.offsetWidth;
+                    const currentHeight = popover.offsetHeight;
+
+                    // Calculate expected size using the same logic as updatePosition
+                    const expectedWidth = Math.max(50, Math.min(800, baseWidth * currentZoom * resizeScaleFactorWidth));
+                    const expectedHeight = Math.max(38, Math.min(1200, baseHeight * currentZoom * resizeScaleFactorHeight));
+                    
+                    const widthDiff = Math.abs(currentWidth - expectedWidth);
+                    const heightDiff = Math.abs(currentHeight - expectedHeight);
+                    const sizeThreshold = 5;
+                    
+                    if (widthDiff > sizeThreshold || heightDiff > sizeThreshold) {
+                        console.log('[Juggl Debug] Manual resize detected at start of graph movement');
+                        console.log(`[Juggl Debug] Size diff: W=${widthDiff.toFixed(1)}, H=${heightDiff.toFixed(1)}`);
+                        
+                        // Calculate new resize scale factors
+                        resizeScaleFactorWidth = currentWidth / (baseWidth * currentZoom);
+                        resizeScaleFactorHeight = currentHeight / (baseHeight * currentZoom);
+                        console.log(`[Juggl Debug] New resize scale factors: W=${resizeScaleFactorWidth.toFixed(2)}, H=${resizeScaleFactorHeight.toFixed(2)}`);
+                    }
                 }
             }
             isGraphMoving = true;
