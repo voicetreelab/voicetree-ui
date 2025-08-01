@@ -222,7 +222,7 @@ export class TerminalHoverEditorPositioning {
                     const diffX = Math.abs(currentX - expectedX);
                     const diffY = Math.abs(currentY - expectedY);
                     
-                    if (diffX > threshold || diffY > threshold) {
+                    if (diffX > threshold || diffY > threshold & !zoomChanged) {
                         console.log('[Juggl Debug] User drag detected at start of graph movement');
                         console.log(`[Juggl Debug] Position diff: X=${diffX.toFixed(1)}, Y=${diffY.toFixed(1)}`);
                         // Convert screen pixel offset to graph units
@@ -245,7 +245,7 @@ export class TerminalHoverEditorPositioning {
                     const heightDiff = Math.abs(currentHeight - expectedHeight);
                     const sizeThreshold = 5;
                     
-                    if (widthDiff > sizeThreshold || heightDiff > sizeThreshold) {
+                    if (widthDiff > sizeThreshold || heightDiff > sizeThreshold & !zoomChanged) {
                         console.log('[Juggl Debug] Manual resize detected at start of graph movement');
                         console.log(`[Juggl Debug] Size diff: W=${widthDiff.toFixed(1)}, H=${heightDiff.toFixed(1)}`);
                         
