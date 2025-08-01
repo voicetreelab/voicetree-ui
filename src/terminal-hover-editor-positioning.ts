@@ -58,6 +58,7 @@ export class TerminalHoverEditorPositioning {
         let isGraphMoving = false;
         let movementTimeout: NodeJS.Timeout;
         let lastZoom = node.cy().zoom();
+        let frameCount = 0;  // Track frames to skip initial drag detection
         // Get zoom-independent base dimensions by dividing out the initial zoom
         const initialZoom = node.cy().zoom();
 
@@ -130,8 +131,8 @@ export class TerminalHoverEditorPositioning {
             const currentZoom = node.cy().zoom();
             
             // Base offsets in graph space (at zoom 1.0)
-            const baseOffsetX = 300;
-            const baseOffsetY = -50;
+            const baseOffsetX = 0;
+            const baseOffsetY = 0;
             
             // Scale offsets with zoom to maintain constant graph distance
             const offsetX = baseOffsetX * currentZoom;
@@ -183,15 +184,24 @@ export class TerminalHoverEditorPositioning {
 
         // Debounced graph movement handler
         const onGraphMovement = () => {
+            frameCount++;
+            
+            // Skip drag detection for first few frames to allow initial positioning
+            if (frameCount < 5) {
+                console.log(`[Juggl Debug] Skipping drag detection during initialization (frame ${frameCount})`);
+                updatePosition();
+                return;
+            }
+            
             const currentZoom = node.cy().zoom();
             const zoomChanged = Math.abs(currentZoom - lastZoom) > 0.001;
             
             if (!isGraphMoving) {
-                console.log('[Juggl Debug] Graph movement started');
+//                 console.log('[Juggl Debug] Graph movement started');
                 
                 // During zoom, skip drag/resize detection but still update position
                 if (zoomChanged) {
-                    console.log('[Juggl Debug] Zoom detected, updating position without drag/resize detection');
+//                     console.log('[Juggl Debug] Zoom detected, updating position without drag/resize detection');
                     lastZoom = currentZoom;
                 } else {
                     // Check for user drag BEFORE we start moving
@@ -202,8 +212,8 @@ export class TerminalHoverEditorPositioning {
                     const boundingBox = node.renderedBoundingBox();
                     const renderedCenterX = (boundingBox.x1 + boundingBox.x2) / 2;
                     const renderedCenterY = (boundingBox.y1 + boundingBox.y2) / 2;
-                    const baseOffsetX = 300;
-                    const baseOffsetY = -50;
+                    const baseOffsetX = 0;
+                    const baseOffsetY = 0;
                     const expectedBaseX = renderedCenterX + (baseOffsetX * currentZoom);
                     const expectedBaseY = renderedCenterY + (baseOffsetY * currentZoom);
                     
@@ -256,9 +266,9 @@ export class TerminalHoverEditorPositioning {
             
             // After 100ms of no movement, declare the graph stationary
             movementTimeout = setTimeout(() => {
-                console.log('[Juggl Debug] Graph movement stopped');
+//                 console.log('[Juggl Debug] Graph movement stopped');
                 isGraphMoving = false;
-            }, 100);
+            }, 110);
             
             // Update position immediately for smooth following
             updatePosition();
@@ -269,8 +279,10 @@ export class TerminalHoverEditorPositioning {
         
         // Listen for graph movements using the debounced handler
         node.on('position', onGraphMovement);
-        node.cy().on('pan zoom resize', onGraphMovement);
-        
+        node.cy().on('pan', onGraphMovement);
+        // don't listen to zoom, since zoom has a focal point so results in a pan + zoom
+
+
         // Store tracking info
         const tracking: HoverEditorTracking = {
             popover,
