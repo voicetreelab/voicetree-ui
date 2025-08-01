@@ -59,7 +59,11 @@ export class TerminalHoverEditorPositioning {
         let movementTimeout: NodeJS.Timeout;
         // Get zoom-independent base dimensions by dividing out the initial zoom
         const initialZoom = node.cy().zoom();
-        const baseWidth = (popover.offsetWidth / initialZoom) ;  //
+
+        //IMPORTANT the base dimensions, is the size the hover editor opens at initially. but this is already AT
+        //     A PARTICULAR ZOOM. e.g. we may be opening hover editor at zoom 5
+
+        const baseWidth = (popover.offsetWidth / initialZoom) ;
         const baseHeight = (popover.offsetHeight / initialZoom) ;
         let resizeScaleFactorWidth = 1;
         let resizeScaleFactorHeight = 1;
@@ -107,6 +111,11 @@ export class TerminalHoverEditorPositioning {
          * - At zoom 2.0x: 300px becomes 600px on screen (same graph distance)
          */
 
+
+         // IMPORTANT, WE DIFFERENTIATE USER EVENts of dragging the hover editor, by whether the new position or size
+         // is not what we would expect based off of the current pan + zoom
+         // if it's different, we change our base offsets and base size
+
         // Calculate default position
         const getDefaultPosition = () => {
             // Use Cytoscape's rendered position directly - it handles all transformations correctly
@@ -128,7 +137,7 @@ export class TerminalHoverEditorPositioning {
             const userOffsetScreenX = userOffsetX * currentZoom;
             const userOffsetScreenY = userOffsetY * currentZoom;
             
-            console.log(`[Juggl Debug] getDefaultPosition - zoom: ${currentZoom.toFixed(2)}, renderedCenter: (${renderedCenterX.toFixed(0)}, ${renderedCenterY.toFixed(0)}), scaledOffset: (${offsetX.toFixed(0)}, ${offsetY.toFixed(0)}), userOffsetScreen: (${userOffsetScreenX.toFixed(0)}, ${userOffsetScreenY.toFixed(0)})`);
+//             console.log(`[Juggl Debug] getDefaultPosition - zoom: ${currentZoom.toFixed(2)}, renderedCenter: (${renderedCenterX.toFixed(0)}, ${renderedCenterY.toFixed(0)}), scaledOffset: (${offsetX.toFixed(0)}, ${offsetY.toFixed(0)}), userOffsetScreen: (${userOffsetScreenX.toFixed(0)}, ${userOffsetScreenY.toFixed(0)})`);
             
             // Apply both base offsets and user offsets
             return {
@@ -144,7 +153,7 @@ export class TerminalHoverEditorPositioning {
             const finalX = defaultPos.x;
             const finalY = defaultPos.y;
             
-            console.log(`[Juggl Debug] Setting popover position: left=${finalX.toFixed(1)}px, top=${finalY.toFixed(1)}px`);
+//             console.log(`[Juggl Debug] Setting popover position: left=${finalX.toFixed(1)}px, top=${finalY.toFixed(1)}px`);
             
             popover.style.position = 'fixed';
             popover.style.left = `${finalX}px`;
@@ -175,10 +184,20 @@ export class TerminalHoverEditorPositioning {
                 // Check for user drag BEFORE we start moving
                 const currentX = parseFloat(popover.style.left) || 0;
                 const currentY = parseFloat(popover.style.top) || 0;
-                const defaultPos = getDefaultPosition();
-                // Default position already includes user offsets
-                const expectedX = defaultPos.x;
-                const expectedY = defaultPos.y;
+                
+                // Calculate expected position WITHOUT user offsets for comparison
+                const boundingBox = node.renderedBoundingBox();
+                const renderedCenterX = (boundingBox.x1 + boundingBox.x2) / 2;
+                const renderedCenterY = (boundingBox.y1 + boundingBox.y2) / 2;
+                const currentZoom = node.cy().zoom();
+                const baseOffsetX = 300;
+                const baseOffsetY = -50;
+                const expectedBaseX = renderedCenterX + (baseOffsetX * currentZoom);
+                const expectedBaseY = renderedCenterY + (baseOffsetY * currentZoom);
+                
+                // Now add scaled user offsets to get expected position
+                const expectedX = expectedBaseX + (userOffsetX * currentZoom);
+                const expectedY = expectedBaseY + (userOffsetY * currentZoom);
                 
                 const threshold = 2;
                 const diffX = Math.abs(currentX - expectedX);
@@ -187,18 +206,17 @@ export class TerminalHoverEditorPositioning {
                 if (diffX > threshold || diffY > threshold) {
                     console.log('[Juggl Debug] User drag detected at start of graph movement');
                     console.log(`[Juggl Debug] Position diff: X=${diffX.toFixed(1)}, Y=${diffY.toFixed(1)}`);
-                    const currentZoom = node.cy().zoom();
                     // Convert screen pixel offset to graph units
-                    userOffsetX = (currentX - defaultPos.x) / currentZoom;
-                    userOffsetY = (currentY - defaultPos.y) / currentZoom;
+                    // Offset = (current position - base position) / zoom
+                    userOffsetX = (currentX - expectedBaseX) / currentZoom;
+                    userOffsetY = (currentY - expectedBaseY) / currentZoom;
                     console.log(`[Juggl Debug] New offset in graph units: ${userOffsetX.toFixed(0)}, ${userOffsetY.toFixed(0)}`);
-                    console.log(`[Juggl Debug] (was ${(currentX - defaultPos.x).toFixed(0)}, ${(currentY - defaultPos.y).toFixed(0)} screen pixels at zoom ${currentZoom.toFixed(2)})`)
+                    console.log(`[Juggl Debug] (was ${(currentX - expectedBaseX).toFixed(0)}, ${(currentY - expectedBaseY).toFixed(0)} screen pixels at zoom ${currentZoom.toFixed(2)})`)
                 }
                 
                 // Check for manual resize BEFORE we update
                 const currentWidth = popover.offsetWidth;
                 const currentHeight = popover.offsetHeight;
-                const currentZoom = node.cy().zoom();
 
                 // Calculate expected size using the same logic as updatePosition
                 const expectedWidth = Math.max(50, Math.min(800, baseWidth * currentZoom * resizeScaleFactorWidth));
