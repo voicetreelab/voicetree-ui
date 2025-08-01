@@ -248,14 +248,57 @@ export class WorkspaceMode extends Component implements IAGMode {
 
     // this is called from mergeToGraph in visualization.ts
 
+    // Helper function to wait for node styling
+    const waitForNodeStyling = (node: NodeSingular, maxWait = 1000): Promise<void> => {
+      return new Promise((resolve) => {
+        const startTime = Date.now();
+        const checkInterval = 50;
+        let checkCount = 0;
+        
+        const check = () => {
+          checkCount++;
+          const borderWidth = node.style('border-width');
+          const borderColor = node.style('border-color');
+          const currentTime = Date.now() - startTime;
+          
+          console.log(`[Juggl] Polling node ${node.id()} style (attempt ${checkCount}, ${currentTime}ms elapsed):`, {
+            borderWidth,
+            borderColor,
+            hasValidBorder: borderWidth && borderWidth !== '0px' && borderColor && borderColor !== 'rgba(0, 0, 0, 0)'
+          });
+          
+          // Node is ready if it has non-zero border styling
+          if (borderWidth && borderWidth !== '0px' && borderColor && borderColor !== 'rgba(0, 0, 0, 0)') {
+            console.log(`[Juggl] Node ${node.id()} styling ready after ${currentTime}ms`);
+            resolve();
+          } else if (currentTime > maxWait) {
+            console.log(`[Juggl] Node ${node.id()} styling timeout after ${currentTime}ms`);
+            resolve(); // Timeout fallback
+          } else {
+            setTimeout(check, checkInterval);
+          }
+        };
+        
+        check();
+      });
+    };
+
     // Handle new nodes added animation
     this.registerEvent(this.view.on('newNodesAdded', (newNodes) => {
       console.log('[Juggl] Handling breathing animation for newly added nodes:', newNodes.length);
-      // Add a longer delay to ensure nodes are fully styled by Cytoscape
-      // This is needed because new nodes need time for stylesheet application
-      // while appended nodes already have styles when the animation is triggered
-      setTimeout(() => {
-        newNodes.forEach((node: NodeSingular) => {
+      
+      newNodes.forEach((node: NodeSingular) => {
+        // Add render event listener for debugging
+        node.cy().one('render', () => {
+          console.log(`[Juggl] Render event fired for node ${node.id()} - checking style:`, {
+            borderWidth: node.style('border-width'),
+            borderColor: node.style('border-color'),
+            backgroundColor: node.style('background-color')
+          });
+        });
+        
+        // Wait for node styling then add animation
+        waitForNodeStyling(node).then(() => {
           // Only add animation if the node doesn't already have one
           if (!this.breathingAnimationManager.isAnimationActive(node)) {
             console.log('[Juggl] Adding breathing animation for new node:', node.id());
@@ -263,7 +306,7 @@ export class WorkspaceMode extends Component implements IAGMode {
             this.breathingAnimationManager.addBreathingAnimation(this.viz.collection(node), AnimationType.NEW_NODE);
           }
         });
-      }, 1000); // Increased delay to allow stylesheet application
+      });
     }));
 
     this.windowEvent = async (evt: KeyboardEvent) => {

@@ -76,23 +76,28 @@ export class BreathingAnimationManager {
       console.log(`[Juggl] Initializing breathing animation for node ${nodeId}, type: ${type}`);
       console.log(`[Juggl] Current border-width: ${node.style('border-width')}, border-color: ${node.style('border-color')}`);
 
-      // Use default values instead of reading from potentially uninitialized styles
-      const defaultBorderWidth = '2';
-      const defaultBorderColor = 'rgba(0, 255, 255, 0.8)';
+      // Capture the actual current border values before animation
+      const currentBorderWidth = node.style('border-width');
+      const currentBorderColor = node.style('border-color');
       
-      // Store default values in node data - these will be used as the "original" values
-      node.data('originalBorderWidth', defaultBorderWidth);
-      node.data('originalBorderColor', defaultBorderColor);
+      // Use current values if they exist, otherwise use sensible defaults
+      const originalBorderWidth = (currentBorderWidth && currentBorderWidth !== '0px' && currentBorderWidth !== '0') 
+        ? currentBorderWidth : '2';
+      const originalBorderColor = (currentBorderColor && currentBorderColor !== 'rgba(0, 0, 0, 0)') 
+        ? currentBorderColor : 'rgba(128, 128, 128, 0.5)'; // Gray default instead of cyan
+      
+      // Store the actual original values
+      node.data('originalBorderWidth', originalBorderWidth);
+      node.data('originalBorderColor', originalBorderColor);
       node.data('breathingActive', true);
       node.data('animationType', type);
       
       // Set initial border style if node has no border
-      const currentBorderWidth = node.style('border-width');
       if (!currentBorderWidth || currentBorderWidth === '0px' || currentBorderWidth === '0') {
         console.log(`[Juggl] Setting initial border for node ${nodeId} to enable animation`);
         node.style({
-          'border-width': defaultBorderWidth,
-          'border-color': defaultBorderColor,
+          'border-width': originalBorderWidth,
+          'border-color': originalBorderColor,
           'border-style': 'solid',
           'border-opacity': 1
         });
@@ -200,7 +205,7 @@ export class BreathingAnimationManager {
     
     // Restore original style
     const originalBorderWidth = node.data('originalBorderWidth') || '2';
-    const originalBorderColor = node.data('originalBorderColor') || 'rgba(0, 255, 255, 0.8)';
+    const originalBorderColor = node.data('originalBorderColor') || 'rgba(128, 128, 128, 0.5)';
     const originalBorderOpacity = node.data('originalBorderOpacity') || '1';
     
     node.style({
