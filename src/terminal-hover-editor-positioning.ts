@@ -1,3 +1,71 @@
+/**
+ * =================================================================================================
+ * COORDINATE SYSTEMS AND POSITIONING LOGIC DOCUMENTATION
+ * =================================================================================================
+ *
+ * This class handles the complex task of pinning a `position: fixed` DOM element (the hover
+ * editor) to a moving node in a Cytoscape graph. The logic has several non-obvious gotchas.
+ *
+ * -------------------------------------------------------------------------------------------------
+ * 1. Core Coordinate Systems
+ * -------------------------------------------------------------------------------------------------
+ *
+ * Cytoscape uses two primary coordinate systems:
+ *
+ * A) GRAPH COORDINATES (Model Space)
+ *    - Obtained via: `node.position()`
+ *    - Fixed coordinates that don't change with zoom/pan. A node at (200, 400) stays there.
+ *    - Used for: The graph data model, layout algorithms, and storing state independent of view.
+ *
+ * B) RENDERED/SCREEN COORDINATES (View Space)
+ *    - Obtained via: `node.renderedBoundingBox()`
+ *    - Screen pixel coordinates that change with zoom/pan.
+ *    - Used for: Mouse events, DOM positioning, and visual rendering.
+ *
+ * -------------------------------------------------------------------------------------------------
+ * 2. Key Gotchas & Solutions
+ * -------------------------------------------------------------------------------------------------
+ *
+ * This implementation solves several critical, non-obvious problems:
+ *
+ * GOTCHA #1: The "Drifting" Zoom Bug
+ *   - PROBLEM: When zooming, the hover editor would drift horizontally. Panning worked fine.
+ *   - ROOT CAUSE: A mismatch of coordinate system origins. The popover (`position: fixed`) is
+ *     relative to the BROWSER VIEWPORT. However, `node.renderedBoundingBox()` returns coordinates
+ *     relative to the CYTOSCAPE CONTAINER element. If the container is not flush with the
+ *     viewport's edge (e.g., there's a sidebar), the origins differ. This error is scaled
+ *     by the zoom, causing the drift.
+ *   - SOLUTION: All positioning calculations must occur in a single, unified coordinate system.
+ *     We standardize on the VIEWPORT system. We get the container's position using
+ *     `cy.container().getBoundingClientRect()` and add its `left` and `top` values to the
+ *     node's rendered coordinates to get the node's true position relative to the viewport.
+ *
+ * GOTCHA #2: Stuttering / Jank on Zoom ("Layout Thrashing")
+ *   - PROBLEM: When multiple editors were open, zooming became choppy and slow.
+ *   - ROOT CAUSE & solution: not yet known
+
+ * GOTCHA #3: Inferring User Drag vs. Graph Movement
+ *   - PROBLEM: How do you know if the editor's position changed because the user dragged it,
+ *     or because the graph moved underneath it?
+ *   - ROOT CAUSE: A naive check will see that the graph moved, see the editor is now in the "wrong"
+ *     place, and incorrectly "correct" its position, creating a negative feedback loop where
+ *     the editor fights against the graph's movement.
+ *   - SOLUTION: Decouple the two concepts. The `onGraphChange` event handler is responsible for
+ *     making the editor follow the graph. A separate, independent polling mechanism (`setInterval`)
+ *     is used to detect user input. It periodically calculates the `expected` position based on
+ *     our state. If the `actual` position in the DOM is different, we can be certain that an
+ *     external force (the user) moved it, and we update our internal `offsetX`/`offsetY` state.
+ *
+ * -------------------------------------------------------------------------------------------------
+ * 3. State Management
+ * -------------------------------------------------------------------------------------------------
+ *
+ * - The `offsetX`, `offsetY`, `width`, and `height` are all stored in GRAPH coordinates.
+ * - This makes the state zoom-independent and provides a stable "source of truth".
+ * - To display the editor, we convert these graph units back to screen pixels at the current zoom.
+ *
+ * =================================================================================================
+ */
 import type { NodeSingular } from 'cytoscape';
 
 /**
