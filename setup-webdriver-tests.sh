@@ -29,7 +29,7 @@ fi
 echo "✅ WebDriver dependencies installed"
 
 # Make sure test vault exists
-TEST_VAULT="/Users/bobbobby/repos/VoiceTreePoc/markdownTreeVault"
+TEST_VAULT="/Users/bobbobby/repos/VoiceTree/markdownTreeVault"
 if [ ! -d "$TEST_VAULT" ]; then
     echo "❌ Test vault not found at $TEST_VAULT"
     echo "Please ensure the test vault exists"

@@ -23,7 +23,7 @@ export const config = {
         browserName: 'obsidian',
         'obsidian:options': {
             // Use our test vault
-            vault: '/Users/bobbobby/repos/VoiceTreePoc/markdownTreeVault',
+            vault: '/Users/bobbobby/repos/VoiceTree/markdownTreeVault',
             
             // Plugin configuration
             plugins: {

@@ -30,17 +30,17 @@ export class BreathingAnimationManager {
     this.defaultConfigs = new Map([
       [AnimationType.PINNED, {
         duration: 800,
-        timeout: 0, // Run forever until hover
+        timeout: 0, // No timeout for pinned nodes
         expandWidth: 4,
-        expandColor: 'rgba(255, 165, 0, 0.9)', // Orange for appended content
+        expandColor: 'rgba(255, 165, 0, 0.9)', // Orange for pinned nodes
         expandOpacity: 0.8,
         contractColor: 'rgba(255, 165, 0, 0.4)',
         contractOpacity: 0.6,
-        type: AnimationType.APPENDED_CONTENT
+        type: AnimationType.PINNED
       }],
       [AnimationType.NEW_NODE, {
         duration: 1000,
-        timeout: 0,
+        timeout: 0, // No timeout for new nodes
         expandWidth: 4,
         expandColor: 'rgba(0, 255, 0, 0.9)', // Green for new nodes
         expandOpacity: 0.8,
@@ -125,19 +125,37 @@ export class BreathingAnimationManager {
       
       // Set timeout to stop the animation (only if timeout > 0)
       if (config.timeout > 0) {
+        console.log(`[Juggl] Setting timeout for ${type} animation on node ${nodeId}: ${config.timeout}ms`);
+        // Capture necessary data in closure
+        const capturedNodeId = nodeId;
+        const cy = node.cy();
+        
         const timeout = setTimeout(() => {
-          console.log(`[Juggl] Stopping ${type} breathing animation for node ${nodeId} after ${config.timeout}ms`);
-          this.stopAnimationForNode(node);
+          console.log(`[Juggl] Timeout fired! Stopping ${type} breathing animation for node ${capturedNodeId} after ${config.timeout}ms`);
+          // Find the node by ID and stop animation
+          const currentNode = cy.getElementById(capturedNodeId);
+          if (currentNode && currentNode.length > 0) {
+            this.stopAnimationForNode(currentNode);
+          } else {
+            console.log(`[Juggl] Warning: Node ${capturedNodeId} not found when timeout fired`);
+            // Still clean up the animation data
+            this.stopAnimation(capturedNodeId);
+          }
         }, config.timeout);
         
         this.breathingTimeouts.set(nodeId, timeout);
+        console.log(`[Juggl] Timeout stored for node ${nodeId}, timeout ID:`, timeout);
+      } else {
+        console.log(`[Juggl] No timeout set for ${type} animation on node ${nodeId} (timeout: ${config.timeout})`);
       }
     });
   }
 
   private createBreathingLoop(node: NodeSingular, config: Required<BreathingAnimationConfig>): void {
+    const nodeId = node.id();
     if (!node.data('breathingActive')) {
-      this.breathingAnimations.delete(node.id());
+      console.log(`[Juggl] Breathing loop stopped for node ${nodeId} - breathingActive is false`);
+      this.breathingAnimations.delete(nodeId);
       return;
     }
 
@@ -196,9 +214,11 @@ export class BreathingAnimationManager {
   }
 
   public stopAnimation(nodeId: string): void {
+    console.log(`[Juggl] stopAnimation called for node ${nodeId}`);
     // Clear timeout
     const timeout = this.breathingTimeouts.get(nodeId);
     if (timeout) {
+      console.log(`[Juggl] Clearing timeout for node ${nodeId}`);
       clearTimeout(timeout);
       this.breathingTimeouts.delete(nodeId);
     }

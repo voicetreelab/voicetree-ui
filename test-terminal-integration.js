@@ -21,8 +21,8 @@ const __dirname = path.dirname(__filename);
 
 class TerminalIntegrationTester {
     constructor() {
-        this.testVaultPath = '/Users/bobbobby/repos/VoiceTreePoc/markdownTreeVault';
-        this.pluginPath = '/Users/bobbobby/repos/VoiceTreePoc/obsidian/juggl-main';
+        this.testVaultPath = '/Users/bobbobby/repos/VoiceTree/markdownTreeVault';
+        this.pluginPath = '/Users/bobbobby/repos/VoiceTree/obsidian/juggl-main';
         this.pluginInstallPath = path.join(this.testVaultPath, '.obsidian/plugins/juggl');
         this.testResults = [];
         this.obsidianProcess = null;

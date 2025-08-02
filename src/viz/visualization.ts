@@ -631,15 +631,18 @@ export class Juggl extends Component implements IJuggl {
       if (debounceLayout) {
         console.log("HUMAN, DEBOUNCE LAYOUT TRUE")
 
-        this.debouncedRestartLayout();
+//         this.debouncedRestartLayout();
       } else {
         console.log("HUMAN, DEBOUNCE LAYOUT FALSE")
-        // Only restart layout if explicitly requested (not false)
-        if (debounceLayout !== false) {
-            console.log("HUMAN, DEBOUNCE??? NOT FALSE")
-
-          this.restartLayout();
-        }
+        // DISABLED: Layout restart to prevent existing nodes from moving when new nodes are added
+        // The new node positioning logic in new-node-positioning.ts already handles
+        // optimal placement without needing force simulation to reorganize everything
+        // Original code:
+        // if (debounceLayout !== false) {
+        //     console.log("HUMAN, DEBOUNCE??? NOT FALSE")
+        //     this.restartLayout();
+        // }
+        console.log("[VoiceTree] Layout restart disabled - nodes will stay in place");
       }
       this.assignStyleGroups();
     }
