@@ -1,4 +1,4 @@
-import type { NodeSingular, Core } from 'cytoscape';
+import type { NodeSingular } from 'cytoscape';
 
 /**
  * Converts a scalar value (like width or an offset delta) from screen units (pixels) to graph units.
@@ -36,14 +36,6 @@ interface HoverEditorState {
 export class TerminalHoverEditorPositioning {
     private trackingMap: Map<string, () => void> = new Map();
 
-    /**
-     * Pins a hover editor to a Cytoscape node, ensuring it stays synchronized
-     * during graph pan, zoom, and node movement.
-     *
-     * @param terminalId - A unique identifier for the terminal being pinned.
-     * @param node - The Cytoscape node to attach the editor to.
-     * @param popoverEl - The HTMLElement of the hover editor.
-     */
     pinHoverEditorToNode(terminalId: string, node: NodeSingular, popoverEl: HTMLElement): void {
         if (this.trackingMap.has(terminalId)) {
             this.cleanup(terminalId);
@@ -51,30 +43,26 @@ export class TerminalHoverEditorPositioning {
 
         const cy = node.cy();
         let dragPollInterval: number;
+        let updatePending = false;
 
         // 1. INITIAL STATE SETUP
         // =================================================================
         const initialZoom = cy.zoom();
-        const pan = cy.pan();
-        const nodePos = node.position(); // Graph units
-
-        // The node's center position in screen coordinates
-        const nodeScreenX = graphToScreen(nodePos.x, initialZoom) + pan.x;
-        const nodeScreenY = graphToScreen(nodePos.y, initialZoom) + pan.y;
-
+        const cyContainerRect = cy.container().getBoundingClientRect();
+        const nodeBoundingBox = node.renderedBoundingBox();
         const popoverRect = popoverEl.getBoundingClientRect();
-        const popoverScreenX = popoverRect.left;
-        const popoverScreenY = popoverRect.top;
 
-        // Calculate the initial offset in screen pixels
-        const initialScreenOffsetX = popoverScreenX - nodeScreenX;
-        const initialScreenOffsetY = popoverScreenY - nodeScreenY;
+        // Convert node's container-relative position to viewport-relative position.
+        const nodeViewportX = cyContainerRect.left + nodeBoundingBox.x1;
+        const nodeViewportY = cyContainerRect.top + nodeBoundingBox.y1;
+
+        // Calculate the initial offset in the viewport's coordinate system.
+        const initialScreenOffsetX = popoverRect.left - nodeViewportX;
+        const initialScreenOffsetY = popoverRect.top - nodeViewportY;
 
         const state: HoverEditorState = {
-            // Convert screen pixel offset to zoom-independent graph units.
             offsetX: screenToGraph(initialScreenOffsetX, initialZoom),
             offsetY: screenToGraph(initialScreenOffsetY, initialZoom),
-            // Convert initial pixel size to zoom-independent graph units.
             width: screenToGraph(popoverEl.offsetWidth, initialZoom),
             height: screenToGraph(popoverEl.offsetHeight, initialZoom),
         };
@@ -82,16 +70,22 @@ export class TerminalHoverEditorPositioning {
         // 2. CORE UPDATE AND EVENT LISTENER FUNCTIONS
         // =================================================================
 
-        /**
-         * Renders the editor's state to the screen. This is the single source of truth for display.
-         */
         const updatePosition = () => {
-            const pan = cy.pan();
             const zoom = cy.zoom();
-            const nodePos = node.position();
+            const cyContainerRect = cy.container().getBoundingClientRect();
+            const nodeBoundingBox = node.renderedBoundingBox();
 
-            const screenX = graphToScreen(nodePos.x + state.offsetX, zoom) + pan.x;
-            const screenY = graphToScreen(nodePos.y + state.offsetY, zoom) + pan.y;
+            // Convert node's position to viewport coordinates.
+            const nodeViewportX = cyContainerRect.left + nodeBoundingBox.x1;
+            const nodeViewportY = cyContainerRect.top + nodeBoundingBox.y1;
+
+            const screenOffsetX = graphToScreen(state.offsetX, zoom);
+            const screenOffsetY = graphToScreen(state.offsetY, zoom);
+
+            // Final position is relative to the viewport.
+            const screenX = nodeViewportX + screenOffsetX;
+            const screenY = nodeViewportY + screenOffsetY;
+
             const screenWidth = graphToScreen(state.width, zoom);
             const screenHeight = graphToScreen(state.height, zoom);
 
@@ -103,40 +97,40 @@ export class TerminalHoverEditorPositioning {
             popoverEl.style.zIndex = '1000';
         };
 
-        /**
-         * Handles graph movement. Its ONLY job is to call updatePosition.
-         */
         const onGraphChange = () => {
-            updatePosition();
+            if (!updatePending) {
+                updatePending = true;
+                requestAnimationFrame(() => {
+                    updatePosition();
+                    updatePending = false;
+                });
+            }
         };
 
-        /**
-         * Polls for user-initiated drag movements by checking for a divergence
-         * between the expected DOM position and the actual DOM position.
-         */
         const pollForDrag = () => {
-            const pan = cy.pan();
             const zoom = cy.zoom();
-            const nodePos = node.position();
+            const cyContainerRect = cy.container().getBoundingClientRect();
+            const nodeBoundingBox = node.renderedBoundingBox();
 
-            const expectedX = graphToScreen(nodePos.x + state.offsetX, zoom) + pan.x;
-            const expectedY = graphToScreen(nodePos.y + state.offsetY, zoom) + pan.y;
+            // Calculate expected position in viewport coordinates.
+            const nodeViewportX = cyContainerRect.left + nodeBoundingBox.x1;
+            const nodeViewportY = cyContainerRect.top + nodeBoundingBox.y1;
+            const expectedX = nodeViewportX + graphToScreen(state.offsetX, zoom);
+            const expectedY = nodeViewportY + graphToScreen(state.offsetY, zoom);
 
             const actualX = parseFloat(popoverEl.style.left) || 0;
             const actualY = parseFloat(popoverEl.style.top) || 0;
 
-            const threshold = 2; // Pixel threshold to prevent jitter
+            const threshold = 2;
             const dx = actualX - expectedX;
             const dy = actualY - expectedY;
 
             if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
-                // A drag occurred. Update the state by converting the pixel delta back to graph units.
                 state.offsetX += screenToGraph(dx, zoom);
                 state.offsetY += screenToGraph(dy, zoom);
             }
         };
 
-        // --- User Resize Handling (Direct) ---
         const resizeObserver = new ResizeObserver(entries => {
             for (const entry of entries) {
                 const zoom = cy.zoom();
@@ -144,18 +138,13 @@ export class TerminalHoverEditorPositioning {
                 state.height = screenToGraph(entry.contentRect.height, zoom);
             }
         });
-        resizeObserver.observe(popoverEl);
 
-        // --- DOM Cleanup ---
         const mutationObserver = new MutationObserver(() => {
             if (!document.body.contains(popoverEl)) {
                 cleanup();
             }
         });
-        mutationObserver.observe(document.body, { childList: true, subtree: true });
 
-        // 3. CLEANUP LOGIC
-        // =================================================================
         const cleanup = () => {
             cy.off('viewport', onGraphChange);
             node.off('position', onGraphChange);
@@ -166,19 +155,15 @@ export class TerminalHoverEditorPositioning {
         };
 
         this.trackingMap.set(terminalId, cleanup);
-
-        // 4. INITIALIZATION
-        // =================================================================
-        updatePosition(); // Initial placement
-        cy.on('viewport', onGraphChange); // Follow graph pan/zoom
-        node.on('position', onGraphChange); // Follow node movement
-        dragPollInterval = window.setInterval(pollForDrag, 200); // Start polling for user drags
+        resizeObserver.observe(popoverEl);
+        mutationObserver.observe(document.body, { childList: true, subtree: true });
+        
+        updatePosition();
+        cy.on('viewport', onGraphChange);
+        node.on('position', onGraphChange);
+        dragPollInterval = window.setInterval(pollForDrag, 200);
     }
 
-    /**
-     * Removes all event listeners and tracking for a given terminal.
-     * @param terminalId - The ID of the terminal to clean up.
-     */
     cleanup(terminalId: string): void {
         const cleanupFn = this.trackingMap.get(terminalId);
         if (cleanupFn) {
@@ -186,9 +171,6 @@ export class TerminalHoverEditorPositioning {
         }
     }
 
-    /**
-     * Cleans up all tracked hover editors.
-     */
     cleanupAll(): void {
         this.trackingMap.forEach(cleanupFn => cleanupFn());
     }
