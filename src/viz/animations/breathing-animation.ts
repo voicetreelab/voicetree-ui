@@ -50,7 +50,7 @@ export class BreathingAnimationManager {
       }],
       [AnimationType.APPENDED_CONTENT, {
         duration: 1200,
-        timeout: 0,
+        timeout: 15000,
         expandWidth: 4,
         expandColor: 'rgba(0, 255, 255, 0.9)',
         expandOpacity: 0.8,
