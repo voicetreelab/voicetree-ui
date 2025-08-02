@@ -460,7 +460,27 @@ echo "────────────────────────�
                 
                 // If we have a node, try to pin the hover editor to it
                 if (node) {
-                    this.hoverEditorPositioning.pinHoverEditorToNode(terminalId, node);
+                    // The new positioning function is synchronous and needs the HTMLElement.
+                    // We must find the element first before calling the function.
+                    setTimeout(() => {
+                        const selectors = ['.hover-editor', '.popover.hover-popover', '.hover-editor-popover'];
+                        let popoverEl: HTMLElement | null = null;
+                        
+                        for (const selector of selectors) {
+                            const popovers = document.querySelectorAll(selector);
+                            if (popovers.length > 0) {
+                                popoverEl = popovers[popovers.length - 1] as HTMLElement;
+                                break;
+                            }
+                        }
+
+                        if (popoverEl) {
+                            console.log(`[Juggl Debug] Found popover element. Pinning to node.`);
+                            this.hoverEditorPositioning.pinHoverEditorToNode(terminalId, node, popoverEl);
+                        } else {
+                            console.error(`[Juggl Debug] Could not find hover editor popover element to pin.`);
+                        }
+                    }, 500); // Wait for popover to be created and rendered.
                 }
             } else {
                 console.error('[Juggl Debug] convertLeafToPopover method not found on hover editor plugin.');
