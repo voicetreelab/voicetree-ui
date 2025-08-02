@@ -410,6 +410,54 @@ echo "────────────────────────�
                 await hoverEditorPlugin.convertLeafToPopover(leafToConvert);
                 console.log(`[Juggl Debug] Terminal ${terminalId} converted to hover editor.`);
                 
+                // Apply 50% height increase after a short delay to ensure rendering
+                const HEIGHT_MULTIPLIER = 1.5;
+                
+                // Wait for hover editor to fully render
+                setTimeout(() => {
+                    // Find the newly created hover editor
+                    const selectors = ['.hover-editor', '.popover.hover-popover', '.hover-editor-popover'];
+                    let popover: HTMLElement | null = null;
+                    
+                    for (const selector of selectors) {
+                        const popovers = document.querySelectorAll(selector);
+                        if (popovers.length > 0) {
+                            popover = popovers[popovers.length - 1] as HTMLElement;
+                            break;
+                        }
+                    }
+                    
+                    if (popover) {
+                        // Check if terminal content has loaded
+                        const terminalContent = popover.querySelector('.terminal');
+                        if (terminalContent) {
+                            // Get the computed height after terminal has rendered
+                            const computedStyle = window.getComputedStyle(popover);
+                            const currentHeight = parseFloat(computedStyle.height);
+                            
+                            // Only apply multiplier if we have a reasonable height
+                            if (currentHeight > 50) {
+                                popover.style.height = `${currentHeight * HEIGHT_MULTIPLIER}px`;
+                                console.log(`[Juggl Debug] Applied height multiplier: ${currentHeight}px -> ${currentHeight * HEIGHT_MULTIPLIER}px`);
+                            } else {
+                                // If still too small, set a reasonable default
+                                const defaultHeight = 400 * HEIGHT_MULTIPLIER;
+                                popover.style.height = `${defaultHeight}px`;
+                                console.log(`[Juggl Debug] Height too small (${currentHeight}px), using default: ${defaultHeight}px`);
+                            }
+                        } else {
+                            console.log('[Juggl Debug] Terminal content not yet loaded in popover');
+                        }
+                    } else {
+                        console.error('[Juggl Debug] Could not find hover editor popover to resize. Possible reasons:');
+                        console.error('  - The hover editor DOM element uses a different CSS class than expected');
+                        console.error('  - The conversion is async and popover not yet in DOM');
+                        console.error('  - The hover editor plugin version has changed its implementation');
+                        console.log('[Juggl Debug] Searched for selectors:', selectors);
+                        console.log('[Juggl Debug] All popovers in DOM:', document.querySelectorAll('.popover'));
+                    }
+                }, 300); // 300ms delay to allow terminal to render
+                
                 // If we have a node, try to pin the hover editor to it
                 if (node) {
                     this.hoverEditorPositioning.pinHoverEditorToNode(terminalId, node);

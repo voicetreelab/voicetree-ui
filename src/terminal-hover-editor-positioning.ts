@@ -64,6 +64,7 @@ export class TerminalHoverEditorPositioning {
 
         //IMPORTANT the base dimensions, is the size the hover editor opens at initially. but this is already AT
         //     A PARTICULAR ZOOM. e.g. we may be opening hover editor at zoom 5
+        // Note: The height may have already been multiplied by 1.5x in terminal-store.ts
 
         let baseWidthZoomInvariant = (popover.offsetWidth / initialZoom) ;
         let baseHeightZoomInvariant = (popover.offsetHeight / initialZoom) ;
