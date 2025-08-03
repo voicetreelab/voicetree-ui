@@ -330,8 +330,7 @@ echo "────────────────────────�
                                 
                                 try {
                                     // Use write method (the correct xterm.js method)
-                                    if (terminal.write) {
-                                        console.log(`[Juggl Debug] Using terminal.write method`);
+                                traversal fixup                                        console.log(`[Juggl Debug] Using terminal.write method`);
                                         // Try different control characters for Enter
                                         terminal.write(`${agentScript}\r`); // Just carriage return (Enter key)
                                         // Alternative: terminal.write(`${agentScript}\n`); // Just newline
