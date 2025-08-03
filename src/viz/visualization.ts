@@ -615,14 +615,18 @@ export class Juggl extends Component implements IJuggl {
         return;
       }
       
-      // Lock all nodes except neighbors and dragged node
-      this.viz.nodes().forEach(node => {
-        if (!neighbors.contains(node) && node !== draggedNode) {
-          node.lock();
-        }
+      // Lock ALL nodes first (including the dragged node)
+      this.viz.nodes().lock();
+      
+      // Then unlock ONLY the neighbors (not the dragged node)
+      neighbors.forEach(node => {
+        node.unlock();
       });
       
-      console.log('[VoiceTree] Locking all nodes except neighbors');
+      // Keep the dragged node locked at its new position
+      draggedNode.lock();
+      
+      console.log('[VoiceTree] Locked all nodes, unlocked only neighbors');
       
       // Run micro-layout with constrained settings
       const localLayout = this.viz.layout({
@@ -647,8 +651,11 @@ export class Juggl extends Component implements IJuggl {
           // Unlock all nodes when done
           this.viz.nodes().unlock();
           
-          // Re-lock pinned nodes
+          // Re-lock pinned nodes (they should stay locked)
           this.getPinned().lock();
+          
+          // The dragged node is now free to be dragged again
+          // but it will stay at its new position
         }
       });
       
