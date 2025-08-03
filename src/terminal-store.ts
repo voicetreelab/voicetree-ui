@@ -273,19 +273,52 @@ echo "────────────────────────�
                 terminal.leaf = newLeaf;
                 terminal.status = 'active';
 
-                if (file && terminalPlugin.getTerminalViewByLeaf) {
-                    console.log(`[Juggl Debug] Checking terminalPlugin.getTerminalViewByLeaf...`);
-                    const termView = terminalPlugin.getTerminalViewByLeaf(newLeaf);
-                    console.log(`[Juggl Debug] termView:`, !!termView);
+                // IMPORTANT: The following code attempts to send commands to the terminal programmatically
+                // but it doesn't work because:
+                // 1. The terminal plugin doesn't expose a proper API to access the terminal object
+                // 2. Even when we find the terminal object, terminal.write() only displays text but doesn't execute it
+                // 3. We tried different control characters (\r, \n, \r\n) but none actually execute the command
+                // 4. The terminal.write() method from xterm.js only writes to the display, not to the shell's stdin
+                // 5. To actually execute commands, we'd need access to the underlying pseudoterminal process,
+                //    which the terminal plugin doesn't expose
+                // 
+                // Instead, we use the print -z approach in .zshrc which pre-fills the command line and lets
+                // the user press Enter to execute it.
+                
+                /*
+                // Try to access the terminal from the leaf's view
+                if (file && newLeaf.view) {
+                    console.log(`[Juggl Debug] Checking for terminal in leaf.view...`);
                     
-                    if (termView && termView.terminal) {
-                        console.log(`[Juggl Debug] Terminal object found! Waiting to send commands...`);
+                    // Wait longer for terminal to fully initialize
+                    setTimeout(() => {
+                        const termView = newLeaf.view as any;
+                        console.log(`[Juggl Debug] termView after delay:`, !!termView);
+                        console.log(`[Juggl Debug] termView properties after delay:`, Object.keys(termView));
                         
-                        // Try different approaches to send the command
-                        setTimeout(() => {
+                        // Check all properties recursively to find terminal
+                        for (const prop of Object.keys(termView)) {
+                            if (prop.includes('terminal') || prop.includes('emulator')) {
+                                console.log(`[Juggl Debug] Found property ${prop}:`, !!termView[prop]);
+                            }
+                        }
+                        
+                        // Try to find the terminal in different locations
+                        const terminal = termView.terminal || 
+                                       termView.emulator?.terminal || 
+                                       termView._terminal ||
+                                       termView.terminalEmulator?.terminal ||
+                                       termView.getTerminal?.();
+                        
+                        if (terminal) {
+                            console.log(`[Juggl Debug] Terminal object found after delay!`);
+                            console.log(`[Juggl Debug] terminal.write is function:`, typeof terminal.write === 'function');
+                            
+                            // Try different approaches to send the command
+                            setTimeout(() => {
                             console.log(`[Juggl Debug] Attempting to send command to terminal`);
-                            console.log(`[Juggl Debug] termView.terminal exists:`, !!termView.terminal);
-                            console.log(`[Juggl Debug] terminal.send is function:`, typeof termView.terminal.send === 'function');
+                            console.log(`[Juggl Debug] terminal exists:`, !!terminal);
+                            console.log(`[Juggl Debug] terminal.write is function:`, typeof terminal.write === 'function');
                             
                             // Check if we should run an agent
                             if (extraEnv?.agent) {
@@ -296,22 +329,15 @@ echo "────────────────────────�
                                 console.log(`[Juggl Debug] Running agent script: ${agentScript}`);
                                 
                                 try {
-                                    // Try different methods
-                                    if (termView.terminal.send) {
-                                        console.log(`[Juggl Debug] Using terminal.send method`);
-                                        termView.terminal.send(`${agentScript}\n`);
-                                    }
-                                    
-                                    // Also try write method if available
-                                    if (termView.terminal.write) {
-                                        console.log(`[Juggl Debug] Also trying terminal.write method`);
-                                        termView.terminal.write(`${agentScript}\r\n`);
-                                    }
-                                    
-                                    // Try paste method if available
-                                    if (termView.terminal.paste) {
-                                        console.log(`[Juggl Debug] Also trying terminal.paste method`);
-                                        termView.terminal.paste(`${agentScript}\n`);
+                                    // Use write method (the correct xterm.js method)
+                                    if (terminal.write) {
+                                        console.log(`[Juggl Debug] Using terminal.write method`);
+                                        // Try different control characters for Enter
+                                        terminal.write(`${agentScript}\r`); // Just carriage return (Enter key)
+                                        // Alternative: terminal.write(`${agentScript}\n`); // Just newline
+                                        // Alternative: terminal.write(`${agentScript}\x0D`); // Hex code for CR
+                                    } else {
+                                        console.error(`[Juggl Debug] terminal.write method not available`);
                                     }
                                 } catch (error) {
                                     console.error(`[Juggl Debug] Error sending command:`, error);
@@ -320,8 +346,9 @@ echo "────────────────────────�
                             
                             // Change to directory
                             const dir = file.parent.path;
-                            if (dir && termView.terminal.send) {
-                                termView.terminal.send(`cd "${dir}"\n`);
+                            if (dir && terminal.write) {
+                                console.log(`[Juggl Debug] Changing directory to: ${dir}`);
+                                terminal.write(`cd "${dir}"\r`);
                             }
                             
                             // Run user-defined command if any
@@ -333,15 +360,19 @@ echo "────────────────────────�
                                     .replace(/{{source_note_basename}}/g, file.basename);
                                 
                                 console.log(`[Juggl Debug] Running user command: ${processedCommand}`);
-                                termView.terminal.send(`${processedCommand}\n`);
+                                if (terminal.write) {
+                                    terminal.write(`${processedCommand}\r`);
+                                }
                             }
                         }, 1000); // Increased wait time
-                    } else {
-                        console.log(`[Juggl Debug] No terminal object found in termView`);
-                    }
+                        } else {
+                            console.log(`[Juggl Debug] No terminal object found after delay`);
+                        }
+                    }, 2000); // Wait for terminal to initialize
                 } else {
-                    console.log(`[Juggl Debug] No file or getTerminalViewByLeaf not available`);
+                    console.log(`[Juggl Debug] No file or newLeaf.view not available`);
                 }
+                */
                 this.events.trigger('modifyNode', terminalId);
                 return newLeaf;
             } else {

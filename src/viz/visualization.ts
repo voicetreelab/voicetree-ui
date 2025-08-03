@@ -298,13 +298,14 @@ export class Juggl extends Component implements IJuggl {
           if (!e.target) {
             return;
           }
-          if (this.activeLayout) {
-            this.activeLayout.stop();
-          }
+          // Commented out to prevent layout restart after dragging
+          // if (this.activeLayout) {
+          //   this.activeLayout.stop();
+          // }
           // this.activeLayout = this.viz.layout(this.colaLayout()).start();
           // Note: This does restart the layout, but it's intentional for drag behavior
           // The current drag behavior is acceptable, so we're keeping this as-is
-          this.activeLayout.start();
+          // this.activeLayout.start();
           const node = e.target;
           node.lock();
           this.activeLayout.one('layoutstop', (e) => {
