@@ -112,17 +112,32 @@ export class TerminalHoverEditorPositioning {
         const cy = node.cy();
         let dragPollInterval: number;
         let updatePending = false;
+        let containerResizeObserver: ResizeObserver;
+        let windowResizeHandler: () => void;
+
+        // Cache container rect with time-based refresh
+        let cachedContainerRect = cy.container().getBoundingClientRect();
+        let lastRectUpdate = Date.now();
+        
+        const getContainerRect = () => {
+            const now = Date.now();
+            if (now - lastRectUpdate > 300) {
+                cachedContainerRect = cy.container().getBoundingClientRect();
+                lastRectUpdate = now;
+            }
+            return cachedContainerRect;
+        };
+        
 
         // 1. INITIAL STATE SETUP
         // =================================================================
         const initialZoom = cy.zoom();
-        const cyContainerRect = cy.container().getBoundingClientRect();
         const nodeBoundingBox = node.renderedBoundingBox();
         const popoverRect = popoverEl.getBoundingClientRect();
 
         // Convert node's container-relative position to viewport-relative position.
-        const nodeViewportX = cyContainerRect.left + nodeBoundingBox.x1;
-        const nodeViewportY = cyContainerRect.top + nodeBoundingBox.y1;
+        const nodeViewportX = cachedContainerRect.left + nodeBoundingBox.x1;
+        const nodeViewportY = cachedContainerRect.top + nodeBoundingBox.y1;
 
         // Calculate the initial offset in the viewport's coordinate system.
         const initialScreenOffsetX = popoverRect.left - nodeViewportX;
@@ -140,12 +155,12 @@ export class TerminalHoverEditorPositioning {
 
         const updatePosition = () => {
             const zoom = cy.zoom();
-            const cyContainerRect = cy.container().getBoundingClientRect();
+            const containerRect = getContainerRect();
             const nodeBoundingBox = node.renderedBoundingBox();
 
             // Convert node's position to viewport coordinates.
-            const nodeViewportX = cyContainerRect.left + nodeBoundingBox.x1;
-            const nodeViewportY = cyContainerRect.top + nodeBoundingBox.y1;
+            const nodeViewportX = containerRect.left + nodeBoundingBox.x1;
+            const nodeViewportY = containerRect.top + nodeBoundingBox.y1;
 
             const screenOffsetX = graphToScreen(state.offsetX, zoom);
             const screenOffsetY = graphToScreen(state.offsetY, zoom);
@@ -177,12 +192,12 @@ export class TerminalHoverEditorPositioning {
 
         const pollForDrag = () => {
             const zoom = cy.zoom();
-            const cyContainerRect = cy.container().getBoundingClientRect();
+            const containerRect = getContainerRect();
             const nodeBoundingBox = node.renderedBoundingBox();
 
             // Calculate expected position in viewport coordinates.
-            const nodeViewportX = cyContainerRect.left + nodeBoundingBox.x1;
-            const nodeViewportY = cyContainerRect.top + nodeBoundingBox.y1;
+            const nodeViewportX = containerRect.left + nodeBoundingBox.x1;
+            const nodeViewportY = containerRect.top + nodeBoundingBox.y1;
             const expectedX = nodeViewportX + graphToScreen(state.offsetX, zoom);
             const expectedY = nodeViewportY + graphToScreen(state.offsetY, zoom);
 
@@ -218,13 +233,33 @@ export class TerminalHoverEditorPositioning {
             node.off('position', onGraphChange);
             resizeObserver.disconnect();
             mutationObserver.disconnect();
+            containerResizeObserver.disconnect();
+            window.removeEventListener('resize', windowResizeHandler);
             clearInterval(dragPollInterval);
             this.trackingMap.delete(terminalId);
+        };
+
+        // Update cache on container resize
+        containerResizeObserver = new ResizeObserver(() => {
+            cachedContainerRect = cy.container().getBoundingClientRect();
+            lastRectUpdate = Date.now();
+            // Immediately update position when container moves
+            updatePosition();
+        });
+        
+        // Update cache on window resize
+        windowResizeHandler = () => {
+            cachedContainerRect = cy.container().getBoundingClientRect();
+            lastRectUpdate = Date.now();
+            // Immediately update position when window resizes
+            updatePosition();
         };
 
         this.trackingMap.set(terminalId, cleanup);
         resizeObserver.observe(popoverEl);
         mutationObserver.observe(document.body, { childList: true, subtree: true });
+        containerResizeObserver.observe(cy.container());
+        window.addEventListener('resize', windowResizeHandler);
         
         updatePosition();
         cy.on('viewport', onGraphChange);
