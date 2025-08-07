@@ -54,7 +54,7 @@ export function findOptimalPosition(parentNode: any, newNode: any): {x: number, 
   }
   
   // Place node at the best angle, 93 units away
-  const distance = 93;
+  const distance = 143;
   const position = {
     x: parentPos.x + Math.cos(bestAngle) * distance,
     y: parentPos.y + Math.sin(bestAngle) * distance
@@ -102,8 +102,8 @@ export function setInitialNodePositions(
         const position = findOptimalPositionFn(lastParentNode, node);
         
         // Add randomness for orphans (up to ±93 units in each direction)
-        position.x += (Math.random() - 0.5) * 2 * 93;
-        position.y += (Math.random() - 0.5) * 2 * 93;
+        position.x += (Math.random() - 0.5) * 2 * 123;
+        position.y += (Math.random() - 0.5) * 2 * 123;
         
         node.position(position);
         console.log(`[Juggl Position Debug] Orphan ${node.id()} placed near last parent ${lastParentNode.id()} with randomness`);
